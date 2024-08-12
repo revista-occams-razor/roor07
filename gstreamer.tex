@@ -1,0 +1,842 @@
+\hypertarget{dcine:gstreamer01-1}{}\label{dcine:gstreamer01}
+\pagestyle{dcine}
+
+\rput(7.9,-0.5){\resizebox{!}{12cm}{{\epsfbox{images/gstreamer_header.eps}}}}
+
+\psset{fillstyle=solid}
+\psframe[fillcolor=black,opacity=0.7](2,-4.5)(17,0)
+
+% -------------------------------------------------
+% Cabecera
+\begin{flushright}
+
+
+{\color{introcolor}\mtitle{14cm}{Programación Multimedia. Reproductor multimedia}}
+
+\msubtitle{12cm}{Programamos un reproductor multimedia con Gstreamer}
+
+{\sf\color{white}{ por Er Espilver}}
+
+%{{\psset{linecolor=black,linestyle=dotted}\psline(-12,0)}}
+\end{flushright}
+
+
+\vspace{2mm}
+% -------------------------------------------------
+
+
+%\lstset{language=C,frame=tb,framesep=5pt,basicstyle=\footnotesize}
+\lstset{language=C,frame=tb,framesep=5pt,basicstyle=\scriptsize}
+
+
+
+\intro{introcolor}{L}{a programación multimedia es esa parte de la programación que se centra
+en los contenidos multimedia, es decir, contenidos en lo que se combinan
+distintas tipos de medios (digitales) como las imágenes y el sonido.
+Dicho así no parece gran cosa pero esta parte de la programación cubre
+un montón de conceptos bastante interesantes.}
+
+\begin{multicols}{2}
+Como acabamos de decir la programación multimedia tiene que ver con todo
+lo relacionado con distintos tipos de contenidos o información. La
+adquisición de los datos, su manipulación, su codificación para su
+posterior almacenamiento en diversos formatos de fichero o su
+transmisión en directo o en diferido, son todos elementos que de una
+forma u otra vamos a utilizar en una aplicación de este tipo.
+
+Tratar todos y cada uno de estos conceptos en profundidad sería una
+tarea bastante complicada, así que vamos a explorar el apasionante mundo
+de la programación multimedia de la mano de la librería
+\verb!gstreamer!, la cual nos va a permitir obviar
+algunos de los detalles más complicados. Intentaremos daros, de todas
+formas, suficiente información sobre esos temas de bajo nivel para que
+los más curiosos podáis explorar en profundidad las áreas que más os
+interesen, y probablemente, en casos concretos, nos adentraremos en un
+vertiginoso descenso al averno del bajo nivel :).
+
+\begin{entradilla}
+{\em Las aplicaciones Multimedia trabajan con distintos tipos de medios: Imagen, Video, Audio,...}
+\end{entradilla}
+
+Aunque todo el mundo tiene una idea aproximada de lo que es una
+aplicación multimedia, merece la pena clarificar algunos conceptos,
+especialmente porque vamos a abordar este tema desde el punto de vista
+de la programación y no como simples usuarios. Así que vamos a ponernos
+un poco en contexto antes de saltar de lleno en el código.
+
+Las principales tareas relacionadas con cualquier aplicación multimedia
+se podrían resumir en estas tres categorías:
+
+\begin{itemize}
+\item
+  Captura/Reprodución de información
+\item
+  Codificación
+\item
+  Almacenamiento/Transmisión
+\end{itemize}
+
+\hypertarget{capturareproduciuxf3n-de-informaciuxf3n.}{%
+\sectiontext{white}{black}{CAPTURA/REPRODUCCIÓN DE INFORMACIÓN}\label{capturareproduciuxf3n-de-informaciuxf3n.}}
+
+Esta tarea implica la programación del hardware para poder obtener
+imágenes y sonido. Por ejemplo, utilizar el interfaz
+\verb!v4l2! del kernel para adquirir imágenes de
+algún dispositivo de captura o \verb!alsa! para
+adquirir audio. Esta parte del proceso está más relacionada con la
+programación de sistemas y de hardware que con la multimedia en si, si
+bien, cuando capturamos imágenes o sonido aplican ciertas
+particularidades.
+
+De la misma manera, otros sistemas y librerías nos permiten reproducir
+la información que hemos capturado. Para el caso del sonido, en muchas
+ocasiones el mismo subsistema se encarga de ambos procesos (captura y
+reproducción) como por ejemplo cuando utilizamos
+\verb!alsa!. Sin embargo, para el video, los sistemas
+suelen ser muy diferentes y tendremos que vérnoslas con \emph{frame
+buffers}, \emph{Sistemas de Ventanas} o \emph{Overlays Hardware}.
+
+\verb!gstreamer! soluciona toda esta complejidad por
+nosotros si bien, necesitamos conocer los fundamentos de como funcionan
+estos procesos para programar correctamente nuestra aplicación
+multimedia.
+
+\hypertarget{codificaciuxf3n}{%
+\sectiontext{white}{black}{CODIFICACIÓN}\label{codificaciuxf3n}}
+
+La información que obtenemos del hardware se suele obtener en crudo
+(\emph{RAW}), lo que significa que: los datos requieren muchísima
+memoria y el formato puede que no sea el más adecuado para la tarea que
+pretendemos solucionar con nuestro programa. Así que normalmente
+deberemos transformar esta información en formatos más convenientes.
+
+Esta es la parte de la programación multimedia que se encarga del
+desarrollo de los famosos codecs. La palabra \emph{codec} no es más que
+la contracción de las palabras \emph{Coder} y \emph{Decoder} puesto que
+el código para codificar y decodificar distintos formatos suele ser muy
+similar y suele venir en parejas.
+
+Se trata de una parte complicada de la programación multimedia que
+requiere saber bastante de matemáticas y del funcionamiento del
+procesador a muy bajo nivel (para el caso de los codecs software) o de
+la arquitectura del procesador y sus componentes (para el caso de los
+codecs hardware). Este proceso suele implicar la compresión de los
+datos. El desarrollo de codecs como VP8/9, Theora o Vorbis caería en
+esta categoría, así como la programación de cualquier nuevo
+formato/codificación que pueda aparecer en el futuro.
+
+\verb!gstreamer! nos ofrece implementaciones de
+prácticamente cualquier \emph{codec} que podamos imaginar con soporte
+para su ejecución en hardware especial si es el caso. Una vez más
+entender los fundamentos del funcionamiento de determinados
+codificadores nos va a permitir ajustar sus parámetros para nuestra
+aplicación o ser capaces de elegir el que mejor se adapte a nuestras
+necesidades.
+
+\hypertarget{almacenamiento-o-transmisiuxf3n}{%
+\sectiontext{white}{black}{ALMACENAMIENTO O TRANSMISIÓN}\label{almacenamiento-o-transmisiuxf3n}}
+
+Una vez codificados los datos habrá distintas cosas que queramos hacer
+con ellos. Normalmente los almacenaremos en un fichero o los enviaremos
+a través de la red. Para ambas cosas es necesario añadir información
+adicional a los datos que obtenemos de nuestros \emph{codecs}, si
+queremos almacenarlos o transmitirlos de forma eficiente.
+
+En muchos casos es necesario combinar más de una secuencia de datos en
+un mismo fichero y en ese caso hablamos de formatos contenedores que
+permiten almacenar múltiples secuencias de datos multimedias codificadas
+de distintas maneras. Pensad por ejemplo en un vídeo. La secuencia de
+imágenes puede estar codificada con Theora o H.264 y la de audio como
+Vorbis o mp4. Para almacenar el vídeo y la imagen juntos usamos un
+formato contenedor como Matrovska (.mkv) que nos permite almacenar
+distintos tipos de información y sincronizarla. Si todo esto os suena a
+chino, o simplemente os suena\ldots{} estáis en el lugar correcto. Poco
+a poco iremos descubriendo los detalles de todos esos nombres raros.
+
+\begin{entradilla}
+{\em Los formatos de tipo contenedores permiten almacenar distintos tipos de medios en un único fichero. Por ejemplo: Multiples Audios y Video}
+\end{entradilla}
+
+Muchos de estos formatos contenedores no se limitan solo a vídeo y
+audio, permitiéndonos almacenar además texto (subtítulos por ejemplo),
+gráficos 3D o pequeños programas para añadir interactividad a la
+experiencia.
+
+De igual forma, transmitir información multimedia por la red requiere el
+uso de protocolos especiales para asegurar la fluidez del contenido y si
+bien \verb!gstreamer! nos va a solucionar un montón
+de problemas, es necesario escribir código adicional para integrar todos
+esos elementos en una aplicación útil.
+
+\hypertarget{la-programaciuxf3n-multimedia-es-difuxedcil}{%
+\sectiontext{white}{black}{LA PROGRAMACIÓN MULTIMEDIA ES
+DIFÍCIL}\label{la-programaciuxf3n-multimedia-es-difuxedcil}}
+
+Quizás hayas oído esta frase y te preguntes que tiene de especial todo
+esto\ldots{}
+
+Pues bien, la principal razón que hace que la programación multimedia
+sea complicada son sus características de tiempo real. Una aplicación
+multimedia se puede considerar, técnicamente, como una aplicación de
+tiempo real blando (\emph{Soft Real-Time}).
+
+\begin{entradilla}
+{\em Las aplicaciones multimedia son tipo especial de Soft Real-time.}
+\end{entradilla}
+
+Un sistema en tiempo real es aquel que tiene que cumplir ciertas
+restricciones temporales, o en otras palabras, se trata de sistemas en
+los que ciertas tareas se tienen que ejecutar en un determinado momento.
+Si el sistema no permite que una tarea se retarde (produciendo un error
+en ese caso), estaríamos ante un sistema de tiempo real duro o
+\emph{Hard Real-time}.
+
+En general, la gente piensa que tiempo real significa que hay que hacer
+las cosas muy rápido, pero las restricciones pueden ser de distintos
+tipos.
+
+La primera vez que me hablaron de sistemas en tiempo real me pusieron el
+ejemplo de una central nuclear en la que cierto proceso debía activarse
+en un momento dado. Ese momento podía ser 2 o 3 días más tarde, no hay
+prisa, pero fuera lo que fuera lo que el proceso involucraba, tenía que
+ejecutarse en el momento justo que le toca, ni antes ni después. Como
+podéis ver, en este ejemplo, nuestro programa no tiene que ser super
+rápido, tenemos días para realizar todos los cálculos que queremos, pero
+si tiene que hacer lo que tenga que hacer en el momento preciso\ldots{}
+Y esa es la razón fundamental de la complejidad de los sistemas en
+tiempo real.
+
+Afortunadamente las aplicaciones multimedia, como os dijimos antes, se
+consideran sistemas de tiempo real blando, lo que hace las cosas más
+fáciles. En los sistemas de tiempo real blando, las tareas también
+tienen que ejecutarse con restricciones tempoirales (normalmente
+terminar en un determinado tiempo), pero si una determinada tarea no es
+capaz de cumplir las restricciones de tiempo asignado, esa tarea se
+descarta y aquí na'pasao nada.
+
+Existe un tercer tipo en el que\ldots{} bueno, el sistema hace lo que
+puede, pero si no es capaz de terminar la tarea en tiempo, pues bueno,
+se termina más tarde. Estos realmente no se pueden considerar sistemas
+de tiempo real, aunque esto es lo que la mayoría de la gente entiende
+por tiempo real. Este es el caso de los videojuegos\ldots{} si tu
+hardware es potente, todo funciona bien, pero si no\ldots{} el juego va
+lento y no pasa nada.
+
+\columnbreak
+
+\hypertarget{tiempo-real-en-aplicaciones-multimedia}{%
+\sectiontext{white}{black}{TIEMPO REAL EN APLICACIONES
+MULTIMEDIA}\label{tiempo-real-en-aplicaciones-multimedia}}
+
+Para clarificar todo esto veamos un sencillo ejemplo.
+
+Imaginemos un sistema de telefonía digital. En cada lado de la
+comunicación, capturamos el audio, lo codificamos de alguna forma para
+posteriormente enviarlo como paquetes que, una vez recibidos en el otro
+extremo se decodifican y se convierten en sonido. Bastante obvio
+verdad?.
+
+Sin embargo, todo este proceso requiere de un tiempo y, como cualquier
+sistema de comunicaciones es susceptible de errores. La forma
+tradicional de lidiar con los errores es repitiendo la operación. Para
+el caso de la transmisión del audio en nuestro ejemplo, el paquete se
+puede corromper o perder, y aquí se nos plantean dos opciones.
+
+La opción 1 es\ldots{} \textbf{REPETIR}. Añadimos al protocolo una forma
+de confirmar la recepción de los paquetes, y si no recibimos esa
+confirmación reenviamos el último paquete hasta que llegue. Así es como
+funciona el protocolo TCP y es la forma de asegurar que los datos llegan
+a su destino. Pero el problema que tenemos aquí es que cada vez que se
+produzca un error (y se producen a menudo), acumularemos un retardo en
+nuestra transmisión, hasta que llegue un momento en el que el tiempo que
+pasa desde que hablamos hasta que nuestro interlocutor recibe el audio
+sea demasiado largo para poder mantener una conversación. Este es el
+caso de un sistema que no aplica restricciones de tiempo real. Esta
+opción nos vale, por ejemplo en un sistema de visualización de videos,
+donde nos podemos permitir esperar un ratito para hacer
+\emph{buffering}, pero no es una opción viable para un sistema de
+comunicación bidireccional.
+
+La opción 2 es\ldots{} \textbf{PASAR DE TODO}. ¿Se ha perdido el
+paquete? bueno, ¿que le vamos a hacer?. En el receptor se perderá un
+pedacito del sonido, pero el resto de paquetes seguirán llegando a
+tiempo y, aunque ese cacho no lo hayamos entendido muy bien, podemos
+seguir hablando. Normalmente los paquetes son pequeños y, para el caso
+de audio esa pérdida de paquete se convierte en una sílaba perdida junto
+con un chasquido (lo que se llama un error de fase, un salto brusco en
+los valores de las muestras).
+
+\begin{entradilla}
+{\em Una aplicación multimedia descarta datos cuando no puede cumplir sus requisitos de tiempo real.}
+\end{entradilla}
+
+En general, además de todo esto, para poder hacer todo lo que tenemos
+que hacer en un tiempo razonable, tenemos que hacerlo muy rápido, y esa
+es otra de las complicaciones de la programación multimedia. Los
+denominados \verb!codecs! son difíciles de programar
+de forma eficiente y suelen requerir implementaciones en ensamblador o
+una interacción muy cercana con el Hardware.
+
+Así que resumiendo. Muchos sistemas multimedia presenta características
+de tiempo real. Afortunadamente se trata de tiempo real blando, pero la
+programación en tiempo real es complicada. Así son las cosas. Pero
+tranquila, al terminar esta serie vas a ser una crack de la programación
+multimedia.
+
+\hypertarget{gstreamer}{%
+\sectiontext{white}{black}{GSTREAMER}\label{gstreamer}}
+
+En esta serie de artículos vamos a utilizar
+\verb!gstreamer!, el cual, además de ser muy potente
+y flexible funciona en prácticamente cualquier plataforma. Como siempre
+nos centraremos en su uso en sistemas GNU/Linux, pero puedes encontrar
+gran cantidad de tutoriales sobre como configurarlo para otras
+plataformas\ldots{} Una vez configurado puedes seguir el curso en la
+plataforma que quieras. Salvo la forma de compilar, la mayoría del
+código debería funcionar sin apenas modificaciones.
+
+\verb!gstreamer! esta formado de tres componentes
+fundamentales:
+
+\begin{itemize}
+\item
+  Una librería con los elementos principales para construir nuestra
+  aplicaciones multimedia
+\item
+  Un conjunto de plug-ins que implementan todo tipo de elementos que
+  vamos a necesitar en nuestras aplicaciones
+\item
+  Un conjunto de herramientas que nos resultarán muy útiles para
+  escribir nuestros programas.
+\end{itemize}
+
+El sistema de plug-ins de \verb!gstreamer! clasifica
+los plug-ins en tres categorías\ldots. y si esto fuera un vídeo, en este
+momento comenzaría a sonar
+\href{https://youtu.be/enuOArEfqGo?si=RIPma5-JsigG7e8k}{Erio Morricone}.
+
+\begin{itemize}
+\item
+  \verb!Good!. \textbf{EL BUENO}. Estos son los
+  plug-ins \emph{pata negra} totalmente soportados y probados que van
+  como un tiro.
+\item
+  \verb!Bad!. \textbf{EL MALO}. Estos plug-ins
+  funcionan bien, pero les falta algo, ya sea alguna opción,
+  documentación, testing y a veces simplemente caen en esta categoría
+  porque no se utilizan mucho.
+\item
+  \verb!Ugly!. \textbf{EL FEO}. Estos plug-ins tienen
+  buena calidad y funcionan correctamente, pero su distribución puede
+  acarrear problemas, por ejemplo, de licencias, patentes ya sea con el
+  propio plug-in o alguna librería que utiliza.
+\end{itemize}
+
+Los plug-ins nos ofrecen elementos que podremos utilizar en las
+\emph{pipelines} de \verb!gstreamer!. En este punto
+me tengo que disculpar, pero habrá ciertas palabras que utilizaremos a
+menudo y que no voy a traducir ya que creo que resultarán en mayor
+confusión y además os complicará la tarea de buscar información online.
+Hablaremos de los \emph{pipelines} hasta la saciedad, y empezaremos en
+un rato, pero primero vamos a configurar nuestro sistema.
+
+\hypertarget{instalaciuxf3n}{%
+\sectiontext{white}{black}{INSTALACIÓN}\label{instalaciuxf3n}}
+
+\verb!gstreamer! es un sistema muy maduro y está
+disponible en los repositorios de todas las distribuciones modernas. Con
+el fin de explicaros que contiene cada paquete vamos a tomar como
+ejemplo la lista de paquetes para distribuciones basadas en Debian. Si
+tenéis problemas siempre podéis usar las instrucciones para Debian en un
+contender \verb!docker!. Podéis encontrar más
+detalles sobre otras formas de instalarlo en la
+\href{https://gstreamer.freedesktop.org/documentation/installing/index.html?gi-language=c}{página
+oficial}
+
+El comando para instalar \verb!gstreamer! en Debian
+sería:
+\end{multicols}
+
+\begin{lstlisting}[language=bash]
+apt-get install 
+    libgstreamer1.0-dev \              # Paquete de desarrollo principal
+    libgstreamer-plugins-base1.0-dev\  # Paquete desarollo para elementos comunes
+    libgstreamer-plugins-bad1.0-dev\   # Paquete desarrollo Plugins Bad
+    gstreamer1.0-plugins-base          # Elementos comunes
+    gstreamer1.0-plugins-good          # Plug-ins Good
+    gstreamer1.0-plugins-bad           # Plug-ins Bad
+    gstreamer1.0-plugins-ugly          # Plug-ins ugly
+    gstreamer1.0-libav                 # Interfaz con ffmpeg/libav
+    gstreamer1.0-tools                 # Herramientas CLI
+    gstreamer1.0-x                     # Interfaz con X-Windows
+    gstreamer1.0-alsa                  # Interfaz con alsa
+    gstreamer1.0-gl                    # Interfaz con OpenGL
+    gstreamer1.0-gtk3                  # Interfaz con GTK3
+    gstreamer1.0-qt5                   # Interfaz con QT5
+    gstreamer1.0-pulseaudio            # Interfaz con PulseAudio
+\end{lstlisting}
+
+
+
+\begin{multicols}{2}
+Este es el conjunto de paquetes recomendado por la web oficial. Al final
+podéis ver varios paquetes relacionados con la visualización de imagen y
+reproducción de sonido, así como soporte para integrar
+\verb!gstreamer! en GUIs como GTK o QT.
+
+Otro paquete interesante es el que permite la integración con OpenCV y
+así desarrollar aplicaciones de procesado de imagen y vídeo, usando toda
+la potencia de \verb!gstreamer! para adquirir los
+datos.
+
+Tras esta no-tan-corta introducción, vamos a empezar con la parte
+práctica e ir introduciendo los conceptos teóricos que necesitemos según
+haga falta.
+
+\hypertarget{reproductor-multimedia-en-la-luxednea-de-comandos}{%
+\sectiontext{white}{black}{REPRODUCTOR MULTIMEDIA EN LA LÍNEA DE
+COMANDOS}\label{reproductor-multimedia-en-la-luxednea-de-comandos}}
+
+Antes de escribir ningún código, me gustaría presentaros a dos
+herramientas clave de \verb!gstreamer!. La primera es
+\verb!gst-launch-1.0!. Esta herramienta nos permite
+probar \emph{pipelines} fácilmente en la línea de comandos y, la verdad,
+se pueden hacer cosas bastante interesantes simplemente usando esta
+utilidad.
+
+Vamos a comenzar con un simple ejemplo, un reproductor multimedia
+básico. Si, podemos hacer esto en una sola línea tal que así:
+
+\begin{lstlisting}
+gst-launch-1.0 playbin uri=\
+https://gstreamer.freedesktop.org\
+/data/media/sintel_trailer-480p.webm
+\end{lstlisting}
+
+El parámetro \verb!uri! acepta exactamente
+eso\ldots{} \verb!URI!s, así que podéis reproducir
+cualquier fichero accesible a través de la red o localmente (usando
+\verb!file:///! en lugar de
+\verb!https://!). Es bastante alucinante eh?
+
+Todo eso lo hace el elemento \verb!playbin! de
+\verb!gstreamer! automáticamente. En unos minutos
+veremos como usar ese elemento en nuestros propios programas y veréis
+que, para casos sencillos como estos, es tan fácil como usar
+\verb!gst-launch-1.0!.
+
+La otra herramienta que tenemos que conocer es
+\verb!gst-inspect-1.0!. Si la ejecutamos sin más nos
+listará todos los plug-ins y elementos que cada uno de ellos
+proporciona. Además, si le pasamos como parámetro el nombre de un
+elemento, nos ofrecerá todos los detalles sobre las propiedades y
+señales que acepta ese componente. Podéis probar:¨
+
+\begin{lstlisting}
+gst-inspect-1.0 playbin
+\end{lstlisting}
+
+Y veréis que este componente nos ofrece un montón de propiedades para
+configurar diferentes aspectos de la reproducción de un determinado
+fichero.
+
+Por el momento hemos estado usando muchos palabros: plug-ins, pipelines,
+elementos,\ldots{} Es hora de dejar claro que representa cada una de
+esas palabras.
+
+\hypertarget{conceptos-buxe1sicos}{%
+\sectiontext{white}{black}{CONCEPTOS BÁSICOS}\label{conceptos-buxe1sicos}}
+
+Para introducir todos esos conceptos vamos a crear un \emph{pipeline}
+muy sencillo de ejemplo, para que sea más fácil entender todo esto.
+
+\begin{lstlisting}
+gst-launch-1.0 videotestsrc ! autovideosink
+\end{lstlisting}
+
+Está es quizás el pipeline más sencillo que podemos escribir, pero
+primero\ldots{} ¿qué es un pipeline?
+
+Un \emph{pipeline} o tubería es la forma en la que
+\verb!gstreamer! realiza el proceso multimedia,
+construye una cadena de elementos que toman datos, hacen algo con ellos
+y luego los pasan al siguiente elemento. Conceptualmente funcionan
+exactamente igual que los \verb!pipes! en
+\verb!bash!.
+
+Los \verb!pipelines! son un tipo especial de
+\verb!bin! que es como
+\verb!gstreamer! llama a los contenedores, o si lo
+prefieres, aquellos elementos que pueden contener otros elementos. Así
+que un \verb!pipeline! es un contenedor de objetos
+(un \verb!bin!) que contiene distintos elementos y a
+veces los trataremos de esta forma.
+
+Cuando usamos \verb!gst-launch-1.0! (y algunas
+funciones C que veremos más tarde), los elementos del \emph{pipeline} se
+enlazan usando \verb"!" (signo de admiración), que lo
+podemos ver como equivalente al \verb!|! que usamos
+en la shell para enlazar comandos uno tras otro.
+
+\columnbreak
+
+\hypertarget{elementos}{%
+\sectiontext{white}{black}{ELEMENTOS}\label{elementos}}
+
+En nuestro ejemplo anterior estamos usando dos elementos:
+\verb!videotestsrc! y
+\verb!autovideosink!
+
+Como os acabamos de decir, los elementos reciben datos y generan datos
+de/para otros elementos. Esto lo hacen a través de
+\verb!pads! o conectores.
+
+Cada elemento tiene \verb!pads! de entrada que se
+conocen como \verb!sink pads! o sumideros (ya que la
+información entra en ellos) y \verb!pads! de salida
+que se conocen como \verb!source pads! o fuentes ya
+que producen datos.
+
+Algunos elementos solo tienen \verb!src pads! y su
+nombre suele terminar en \verb!src!.
+\verb!videotestsrc! es uno de esos elementos. Genera
+una imagen de test (una carta de ajuste), pero no recibe datos de ningún
+otro elemento. Los elementos \verb!src! suelen estar
+al principio del pipeline ya que son los que producen los datos para el
+resto del pipeline.
+
+\begin{entradilla}
+{\em Los elementos solo con pads de salida se denominan fuentes (src) y los que solo tienen pads de entrada sumideros (sink)}
+\end{entradilla}
+
+Los elementos que solo tienen \verb!pads! de entrada
+tienen nombres terminados \verb!sink!. El elemento
+\verb!autovideosink! es un elemento que solo tiene
+\verb!pads! de entrada como podemos deducir por su
+nombre terminado en \verb!sink!. Los elementos
+\verb!sink! terminan el pipeline ya que, al no tener
+\verb!pads! de salida no pueden seguir propagando los
+datos.
+
+El elemento \verb!autovideosink! es capaz de elegir,
+a partir de los datos que recibe, cual es el mejor
+\verb!sink! de video a utilizar, si bien podemos
+decidir usar un \verb!sink! de vídeo especifico si
+así lo deseamos:
+
+\begin{lstlisting}
+gst-launch-1.0 videotestsrc ! aasink
+\end{lstlisting}
+
+En este caso estamos diciéndole a \verb!gstreamer!
+que use el \emph{ASCII Art} sink. También podéis probar
+\verb!cacasink! si queréis colores.
+
+\begin{quote}
+Resumiendo. Un \verb!pipeline! es un contenedor o
+\verb!bin! que contiene (valga la redundancia)
+\verb!elements! enlazados a través de
+\verb!pads! que utilizan para pasar la información de
+unos elementos a otro siguiendo una determinada dirección. Los
+\verb!plugins! son, efectivamente, librerías
+dinámicas que proporcionan la implementación de los
+\verb!elements!.
+\end{quote}
+
+\hypertarget{propiedades}{%
+\sectiontext{white}{black}{PROPIEDADES}\label{propiedades}}
+
+Como vimos anteriormente \verb!gst-inspect-1.0! nos
+permite examinar todos los detalles de un determinado elemento
+(incluyendo información sobre los \verb!pads!, pero
+sobre eso volveremos más adelante). Si examinamos nuestro elemento
+\verb!videotestsrc! veremos un montón de propiedades
+que podemos modificar.
+
+Por ejemplo podemos cambiar nuestra aburrida carta de ajuste por una
+divertida pelota que rebota en los bordes de la pantalla.
+
+\begin{lstlisting}
+gst-launch-1.0 videotestsrc pattern=18 motion=0 ! \
+autovideosink
+\end{lstlisting}
+
+Para cada elemento de nuestra \emph{pipeline} podemos modificar sus
+propiedades, si bien, dependiendo de la naturaleza del elemento puede
+que no haya mucho que modificar.
+
+Por ejemplo, el elemento \verb!autovideosink! solo
+proporciona un conjunto básico de propiedades necesarias para todos los
+\verb!sinks!\ldots{} no hay mucho que modificar.
+Aunque la propiedad \verb!sync! merece una mención
+especial.
+
+Hablaremos en detalle sobre esto más adelante, pero a modo de
+introducción os diremos que \verb!gstreamer! se
+encarga de la sincronización entre los distintos componentes para que
+los datos lleguen en el momento adecuado y podamos, por ejemplo, ver
+nuestra película sin saltos aleatorios o como si fuera uno de los filmes
+de los hermanos Lumiere. La propiedad \verb!sync! de
+los elementos \verb!sinks! permite desactivar esta
+sincronización haciendo que \verb!gstreamer! mueva
+los datos lo más rápido que pueda. Activar esta propiedad es a veces
+útil durante la depuración.
+
+\hypertarget{nuestro-primer-programa}{%
+\sectiontext{white}{black}{NUESTRO PRIMER PROGRAMA}\label{nuestro-primer-programa}}
+
+Con todo lo que hemos visto hasta el momento, estamos en condiciones de
+poder escribir y entender nuestro primer programa
+\verb!gstreamer!. Va a ser muy cortito, pero nos va a
+permitir introducir los elementos básicos de todos los programas que
+veremos en las siguientes entregas.
+
+Este es el código completo:
+
+\begin{lstlisting}[language=C]
+#include <gst/gst.h>
+#include <stdio.h>
+#include <string.h>
+
+int
+main (int argc, char *argv[])
+{
+  GstElement *pipeline;
+  GstBus     *bus;
+  GstMessage *msg;
+  char        cmd[2048];
+ 
+  gst_init (&argc, &argv);
+
+  snprintf (cmd, 2048, "playbin uri=%s", argv[1]);
+  pipeline = gst_parse_launch (cmd, NULL);
+
+  gst_element_set_state (pipeline, GST_STATE_PLAYING);
+
+  bus = gst_element_get_bus (pipeline);
+  msg = gst_bus_timed_pop_filtered (bus,
+                    GST_CLOCK_TIME_NONE,
+                    GST_MESSAGE_ERROR | GST_MESSAGE_EOS);
+
+  if (GST_MESSAGE_TYPE (msg) == GST_MESSAGE_ERROR) {
+    g_error ("ERROR!. Inicializa la variable de entorno "
+             "GST_DEBUG=*:WARN para más detalles");
+  }
+
+  gst_message_unref (msg);
+  gst_object_unref (bus);
+  gst_element_set_state (pipeline, GST_STATE_NULL);
+  gst_object_unref (pipeline);
+  return 0;
+}
+\end{lstlisting}
+
+Lo primero que debemos hacer es ejecutar
+\verb!gst\_init! para inicializar
+\verb!gstreamer!. Como podéis ver, le podemos pasar
+los parámetros recibidos por la línea de comandos. Esto nos permite
+procesar ciertos \emph{flags} generales que podemos pasar a todas las
+aplicaciones \verb!gstreamer!, pero por ahora
+simplemente nos interesa inicializar la librería.
+
+\hypertarget{el-pipeline}{%
+\sectiontext{white}{black}{El PIPELINE}\label{el-pipeline}}
+
+Tras eso construimos el \emph{pipeline}. Como podéis ver está declarado
+como un \verb!GstElement!, sí, los
+\verb!bins! también son elementos, aunque veremos más
+adelante como utilizar sus características especiales.
+
+\begin{lstlisting}[language=C]
+  snprintf (cmd, 2048, "playbin uri=%s", argv[1]);
+  pipeline = gst_parse_launch (cmd, NULL);
+\end{lstlisting}
+
+Como podéis ver estamos usando el elemento
+\verb!playbin! e inicializando su propiedad
+\verb!uri! con el parámetro que recibimos por la
+línea de comandos. De esta forma, nuestro pequeño reproductor multimedia
+puede reproducir ficheros locales o remotos.
+
+En las siguientes entregas veremos como construir nuestros
+\emph{pipelines} manualmente ya que en ciertas aplicaciones es necesario
+hacerlo así. En casos sencillos como estos podemos utilizar la función
+\verb!gst\_parse\_launch! que nos permite usar
+exactamente las mismas secuencias que usamos con
+\verb!gst-launch-1.0! en la línea de comandos. Prueba
+por ejemplo a sustituir \verb!cmd! con nuestra
+\verb"videotetsrc ! autovideosink" pipeline.
+
+Una vez que el \emph{pipeline} está creado, es decir, todos los
+elementos que lo componen han sido creados y enlazados sus
+\verb!pads! de entrada y salida. Debemos decirle al
+\emph{pipeline} que los datos comiencen a fluir, desde los nodos
+\verb!src! a los nodos
+\verb!sink!. Eso lo hacemos poniendo el
+\emph{pipeline} en estado `GST\_STATE\_PLAYING\_.
+
+\begin{entradilla}
+{\em Cuando activamos el estado \verb!GST_STATE_PLAYING! los datos comenzarán a fluir a través de los elementos del pipeline.}
+\end{entradilla}
+
+Las \emph{pipelines} pueden estar en varios estados, y las transiciones
+entre ellos deben hacerse en un determinado orden. En este caso tan
+sencillo, solo tenemos que activar el estado
+\verb!PLAYING!. En próximas entregas veremos todos
+los detalles sobre como controlar las transiciones entre estados.
+
+\hypertarget{el-bus}{%
+\sectiontext{white}{black}{El BUS}\label{el-bus}}
+
+Una aplicación \verb!gstreamer! funciona en un bucle
+infinito, en el cual, en cada ciclo, los datos se van moviendo de
+componente a componente para que la información multimedia sea procesada
+de la forma que hayamos decidido, es decir, con el \emph{pipeline} que
+hayamos proporcionado. Además, \verb!gstreamer! hace
+esto utilizando múltiples thread que gestiona internamente y por tanto
+diferentes a la hebra principal de nuestra aplicación (la que ejecuta
+nuestra función \verb!main!).
+
+Durante esos ciclos, los distintos elementos de la pipeline pueden
+generar errores (la conexión de red se ha cortado), eventos (el fichero
+se ha terminado) u otros tipos de señales que la aplicación principal
+necesita conocer para actuar en consecuencia.
+
+La forma en la que esta información se envía a la aplicación principal
+es usando un \verb!bus!. En nuestra aplicación de
+ejemplo esto sucede en las siguientes dos líneas:
+
+\begin{lstlisting}[language=C]
+  bus = gst_element_get_bus (pipeline);
+  msg = gst_bus_timed_pop_filtered (bus,
+                    GST_CLOCK_TIME_NONE,
+                    GST_MESSAGE_ERROR | GST_MESSAGE_EOS);
+\end{lstlisting}
+
+La primera línea nos permite obtener el bus asociado a nuestra
+\emph{pipeline}.
+
+La siguiente línea es la que implementa el bucle infinito. Esta función
+repite el bucle principal del pipeline indefinidamente
+(\verb!GST_CLOCK_TIME_NONE! este parámetro es un
+timeout que significa no timeout) hasta que, o se produzca un error
+\verb!GST_MESSAGE_ERROR! o el stream se haya
+consumido totalmente (\verb!GST_MESSAGE_EOS!
+\emph{End Of Stream}).
+
+El segundo parámetro de
+\texttt{gst\_bus\_timed\_pop\_filtered} es un time-out
+que hará que la función retorne el control al programa principal cada
+cierto tiempo. En este caso, nuestro programa principal no hace nada,
+así que simplemente dejamos que \verb!gstreamer! haga
+su magia hasta que la peli termine o se produzca un error.
+
+\hypertarget{errores}{%
+\sectiontext{white}{black}{ERRORES}\label{errores}}
+
+En una aplicación multimedia un montón de cosas pueden ir mal e iremos
+viendo ejemplos a lo largo de esta serie. En este ejemplo la gestión de
+errores es muy básica y se reduce a una sola línea:
+
+\begin{lstlisting}[language=C]
+  if (GST_MESSAGE_TYPE (msg) == GST_MESSAGE_ERROR) {
+    g_error ("ERROR!. Inicializa la variable de "
+         "entorno GST_DEBUG=*:WARN para más detalles");
+  }
+\end{lstlisting}
+
+Como dijimos en la sección anterior,
+\texttt{gst\_bus\_timed \_pop\_filtered} solo retornará
+si se ha terminado el fichero (mensaje
+\verb!GST_MESSAGE_EOS!) o en caso de error. En
+cualquier caso retorna un mensaje, el cual podemos comprobar en nuestra
+aplicación y actuar en consecuencia. La línea de código anterior
+comprueba el tipo de mensaje, y si se trata de un error muestra un
+mensaje en \verb!stderr!.
+
+Para los más curiosos las variable de entornos
+\verb!GST\_DEBUG! nos permite generar información de
+debug interna que es útil para la depuración de pipelines más complejas.
+Acabaremos utilizándola más adelante\ldots{}
+
+\columnbreak
+
+\hypertarget{gestiuxf3n-de-memoria}{%
+\sectiontext{white}{black}{GESTIÓN DE MEMORIA}\label{gestiuxf3n-de-memoria}}
+
+\verb!gstreamer! mantiene un contador de referencias
+para todos los objetos que son creados por la librería. No existen
+funciones para destruir los objetos directamente, sino que tenemos que
+de-referenciar los objetos. Cuando el contador de referencias asociado a
+un determinado objeto llega a cero, el objeto es destruido.
+
+La parte final del código hace esto:
+
+\begin{lstlisting}[language=C]
+  gst_message_unref (msg);
+  gst_object_unref (bus);
+  gst_element_set_state (pipeline, GST_STATE_NULL);
+  gst_object_unref (pipeline);
+\end{lstlisting}
+
+Observad que antes de de-referenciar el \emph{pipeline} debemos poner su
+estado a \verb!GST_STATE_NULL! lo cual le dice al
+\emph{pipeline} que libere los recursos que haya podido reservar durante
+su operación). La llamada a \verb!gst\_object\_unref!
+al final es la encargada de eliminar todos los elementos creados dentro
+de la \emph{pipeline} y la \emph{pipeline} propiamente dicha.
+
+\verb!gstreamer! hace un montón en lo referente a la
+gestión de memoria, pero como podéis ver, siempre hay algunas acciones
+que dependen de nosotros.
+
+\hypertarget{compilaciuxf3n}{%
+\sectiontext{white}{black}{COMPILACIÓN}\label{compilaciuxf3n}}
+
+\verb!gstreamer! usa
+\verb!pkg-config! para encapsular los parámetros de
+compilación, lo cual está genial ya que no tenemos que preocuparnos de
+actualizar nuestros \verb!makefiles! con nuevas
+versiones. La forma de compilar nuestro programa anterior sería:
+
+\begin{lstlisting}
+ gcc gs-01.c -o gs-01 \
+ `pkg-config --cflags --libs gstreamer-1.0`
+\end{lstlisting}
+
+Para los menos experimentados o los que no hayáis visto este tipo de
+línea de compilación observad que las comillas entorno a
+\verb!pkg-config! son las comillas inversas que
+significan: \emph{``Añade aquí lo que sea que escriba en la consola el
+comando que te paso''}.
+
+Y ahora ya podéis disfrutar de vuestro propio reproductor multimedia
+super básico:
+
+\begin{lstlisting}
+./gs-01 https://gstreamer.freedesktop.org/data/media/\
+sintel_trailer-480p.webm
+\end{lstlisting}
+
+\hypertarget{conclusiones}{%
+\sectiontext{white}{black}{CONCLUSIONES}\label{conclusiones}}
+
+En esta primera entrega os hemos contado los fundamentos de la
+programación multimedia y su relación con los sistemas en tiempo real lo
+cual es una de las razones por las que las programación multimedia puede
+resultar complicada.
+
+Además hemos dado nuestros primeros pasos con
+\verb!gstreamer! introducido los elementos más
+básicos y creado una aplicación capaz de reproducir varios tipos de
+elementos multimedia disponibles desde distintas fuentes, incluyendo la
+red.
+
+En la próxima entrega vamos a profundizar en nuevos conceptos de
+\verb!gstreamer! y crear nuevas y emocionantes
+aplicaciones.
+
+\rput(5.0,-12.5){\resizebox{!}{26cm}{{\epsfbox{images/promo/promo01.eps}}}}
+\raggedcolumns
+\clearpage
+\end{multicols}

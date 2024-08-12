@@ -1,0 +1,720 @@
+\hypertarget{seguridad:crypt2-1}{}\label{seguridad:crypt2}
+\pagestyle{seguridad}
+
+\rput(7.9,-0.5){\resizebox{!}{14cm}{{\epsfbox{images/seguridad2-header.eps}}}}
+
+\psset{fillstyle=solid}
+\psframe[fillcolor=black,opacity=0.7](2,-4.5)(17,0)
+
+
+
+
+
+% -------------------------------------------------
+% Cabecera
+\begin{flushright}
+
+
+{\color{pink}\mtitle{14cm}{Seguridad Para meros Mortales...}}
+
+\msubtitle{8cm}{Cryptografía Parte II}
+
+{\sf\color{white}{ por Er Enigma}}
+
+%{{\psset{linecolor=black,linestyle=dotted}\psline(-12,0)}}
+\end{flushright}
+
+
+\vspace{2mm}
+% -------------------------------------------------
+\lstset{language=C,frame=tb,framesep=5pt,basicstyle=\scriptsize}
+
+\intro{introcolor}{E}{n esta segunda entrega de nuestra introducción a la criptografía para
+meros mortales vamos a explorar la criptografía desde un punto de vista
+más práctico. Veremos distintos tipos de ataques tanto para evitar las
+medidas de seguridad criptográficas de un determinado sistema, como para
+romper claves si fuera necesario.}
+
+\begin{multicols}{2}
+
+En la
+\href{https://ibolcode.net/roor/2024-03-criptografia-para-dummies}{primera
+parte} de este artículo os contamos como funcionan los sistemas
+criptográficos y como se usan en nuestras comunicaciones cotidianas.
+Ahora veremos tipos específicos de ataques así como algunas formas de
+solucionarlos\ldots{} Aunque todo se reduce a la eterna historia del
+gato y el ratón. Cuando un nuevo sistema de seguridad aparece, una nueva
+forma de evitarlo también surge junto con él.
+
+Sin más dilación vamos a ello.
+
+\hypertarget{ataques-mitm}{%
+\sectiontext{white}{black}{ATAQUES MITM}\label{ataques-mitm}}
+
+Los ataques \emph{Man-In-The-Middle} (o ataques de hombre en el medio)
+buscan intercalar un servicio entre nosotros y el servicio final al que
+queremos acceder. Este tipo de ataques se utilizan en muchos contextos,
+siendo el acceso al tráfico HTTPS cifrado uno de ellos y por ello suelen
+ser uno de los elementos de los ataques de \emph{PHISING} que
+introdujimos en la parte anterior
+
+En el caso de un sitio web, esto funcionaría de la siguiente forma.
+Imaginad que queremos acceder a nuestro banco
+\verb!bancooccams.com!, pero alguien a licendiado el
+dominio, \verb!bancoocams.com!.
+
+\begin{itemize}
+\item
+  El atacante consigue de alguna forma engañarnos para acceder a
+  \verb!bancoocams.com!. Esto suele ser utilizando un
+  mensaje en el que se hacen pasar por la entidad a la que pretenden
+  suplantar.
+\item
+  En ese sitio web cuyo dominio le pertenece y para el que ha obtenido
+  un certificado valido, nuestra conexión es aceptada sin problemas.
+  Para nosotros todo parece correcto. No nos hemos dado cuenta del error
+  en el nombre del dominio y nuestra conexión es segura\ldots{} el
+  candadito de la barra de direcciones esta cerrado.
+\item
+  Además de todo esto, el atacante reproduce el sitio web de
+  \verb!bancooccamscom! con total exactitud. Como os
+  podéis imaginar esto no es ningún problema ya que el sitio web es
+  público y cualquiera puede descargar la página del banco o cualquier
+  imagen que utilice. Todo parece correcto.
+\item
+  El atacante puede ahora descifrar nuestro tráfico (esta actuando como
+  el servicio web original que queríamos acceder), puede ver todos los
+  datos que enviamos al servidor web.
+\end{itemize}
+
+\medskip
+\hrule
+{\color{darkgray}
+\begin{quote}
+Nunca pulses directamente en un enlace recibido por correo o mensaje
+incluso si viene de una persona en la que confías. Hay formas de
+falsificar los mensajes para que parezca que vienen de una determinada
+persona.
+\end{quote}
+}
+\hrule
+\medskip
+
+En este punto hay distintas posibilidades, dependiendo del tipo de
+autenticación requerida. Imaginad que el sitio web solo requiere nombre
+de usuario y contraseña para acceder. El atacante, una vez que los ha
+obtenido de la victima, puede simular un error, como si el usuario
+hubiera equivocado al meter la contraseña, mostrar el error y redirigir
+al usuario al sitio real, pero tras haber robado sus credenciales.
+
+Pero se puede ir más allá y aquí es donde realmente empieza el ataque
+MitM.
+
+\hypertarget{como-funciona-mitm}{%
+\sectiontext{white}{black}{COMO FUNCIONA MitM}\label{como-funciona-mitm}}
+
+Imaginemos que \verb!bancooccams.com! son gente seria
+y utilizan algún tipo de autenticación multifactor\ldots{} Os envían un
+SMS, o debéis utilizar una aplicación de autenticación\ldots{} En ese
+caso es necesario dejar que la víctima interactúe con el servicio real,
+pero bajo la supervisión del atacante. Veamos como lo hacen:
+
+\begin{itemize}
+\item
+  El atacante crea una conexión al servicio real
+  \verb!bancooccams.com! la cual sería una conexión
+  normal y corriente. Recordad que HTTPS no require autenticar al
+  cliente.
+\item
+  En este punto el atacante tiene una conexión perfectamente segura con
+  la víctima y otra conexión perfectamente segura con el servicio real.
+  Está en el medio :)
+\item
+  Ahora el atacante solo tiene que leer los mensajes que recibe de la
+  victima para re-enviarlos al servicio y viceversa.
+\item
+  Ahora el atacante también puede descifrar los mensajes que recibe del
+  servidor real y dejar que el usuario real complete el proceso de
+  autenticación.
+\end{itemize}
+
+Como podéis ver, un ataque MITM simplemente consiste en poner un
+servicio entre medias que coge los datos de un lado y los manda al otro,
+pero entre medias puede leer o modificar esos datos. Este tipo de
+ataques no son exclusivos de los servicios web y se pueden aplicar en
+muchos casos incluso con hardware o cualquier tipo de programa.
+
+\hypertarget{redes-wifi-seguras}{%
+\sectiontext{white}{black}{REDES WIFI SEGURAS}\label{redes-wifi-seguras}}
+
+En nuestro ejemplo anterior utilizamos un nombre de dominio muy parecido
+al real para intentar engañar al usuario. Sin embargo hay otras formas
+de conseguir eso. Vamos a explicaros como funcionan las WIFIs y de paso
+ver como se puede hacer una ataque MITM de otra forma, utilizando lo que
+se conoce como un \emph{Rogue AP} o punto de acceso canalla :).
+
+\begin{entradilla}
+{\em Un Rogue AP se hace pasar por una red wifi conocida y captura el tráfico cuando un dispositivo se conecta a ellos.}
+\end{entradilla}
+
+Las redes WIFI también usan ese tipo de lenguaje que da una falsa
+sensación de seguridad. Utilizan términos como red segura o insegura.
+Una vez más, en ese caso, de lo que se trata es de cifrar el tráfico que
+va desde nuestro dispositivo al router o punto de acceso WIFI que
+tengáis en casa.
+
+Sin embargo, esto no es tan seguro como suena. El tráfico dentro de la
+wifi está cifrado, es decir, alguien que no esté conectado a la wifi no
+puede verlo. Pero cualquiera conectado a esa misma wifi puede ver todo
+el tráfico que fluye por ella. Así que, por ejemplo, si no utilizas
+HTTPS para acceder a tu banco y piensas que da igual porque estás usando
+tu WIFI supersegura con cifrado WPA2/Enterprise\ldots{} bueno espero que
+hayas tomado medidas para que nadie se cuele en tu red.
+
+A lo mejor sois vosotros mismos los que dais acceso a la red a alguna
+visita o algo así. Aunque tengáis fé ciega en esa persona\ldots{} puede
+que el dispositivo que use para acceder a vuestra wifi este comprometido
+y los que acaben teniendo un problema de seguridad seáis vosotros.
+
+\medskip
+\hrule
+{\color{darkgray}
+\begin{quote}
+Si puedes usa una red alternativa para las visitas. Muchos router te
+permiten activar un segundo punto de acceso aislado de tu red normal.
+\end{quote}
+}
+\hrule
+\medskip
+
+Podrías pensar\ldots{} He puesto una clave wifi super chunga a mi red y
+nadie va a ser capaz de romperla. Probablemente sea cierto,\ldots. pero
+sigue leyendo
+
+\hypertarget{cuuxeddate-de-las-wifis-puxfablicas}{%
+\sectiontext{white}{black}{CUÍDATE DE LAS WIFIs PÚBLICAS}\label{cuuxeddate-de-las-wifis-puxfablicas}}
+
+Mucha gente se conecta a redes wifi públicas sin ningún tipo de reserva.
+No es que sea un problema per sé, pero hay una serie de cuestiones que
+es mejor que tengamos presente.
+
+\begin{entradilla}
+{\em El uso de redes wifi publicas entraña ciertos peligros si no tenemos cuidado}.
+\end{entradilla}
+
+Como os acabamos de contar, todo el mundo conectado a la misma red wifi,
+utiliza el mismo cifrado y por lo tanto puede ver nuestro tráfico.
+Incluso si utilizan HTTPS para acceder a la web, cualquiera en la red va
+a poder ver a que sitios web estás accediendo, aunque no la información
+que envías ya que, como sabemos, HTTPS ofrece cifrado punto a punto.
+Pero el problema es otro.
+
+La mayoría de dispositivos están configurados para que una vez que les
+hayas permitido acceder a una determinada red WIFI, el dispositivo la
+considerará conocida y se conectará directamente a esa red cuando la
+vea, a no ser que configures tu dispositivo para que no lo haga\ldots{}
+Pero seamos realista, es muy cómodo tener los datos y la wifi y cada vez
+que me acerco a un sitio con wifi gratis que use esa red y no me gaste
+los datos.
+
+Bien, pues ese es el problema. Las redes wifi se reconocen básicamente
+por su nombre. Imagina que eres un cliente habitual del
+\emph{EstarBACKS} y tienes su wifi configurada para usarla
+automáticamente. Ahora imagina que vas en el tren. Alguien configura un
+punto de acceso con el nombre \emph{EstarBACKS}. Tu dispositivo, y
+probablemente el de más de uno en el tren se va a conectar
+automáticamente a ti porque eres una red conocida y a partir de ese
+momento todo el acceso a internet de esos dispositivos está bajo tu
+control. Esta es otra forma de implementar un ataque MiTM y se conoce
+como \emph{Rogue Access Point} o punto de acceso malvado, canalla o
+deshonesto\ldots{} como quieras traducirlo :). A diferencia del caso
+anterior usando un dominio, en este caso, el atacante tiene acceso a
+todo el tráfico de las víctimas, no solo el tráfico web.
+
+Así que mejor no utilices wifis públicas a no ser que\ldots. Accedas
+utilizando una VPN.
+
+\hypertarget{bonus-rogue-ap}{%
+\sectiontext{white}{black}{BONUS: ROGUE AP}\label{bonus-rogue-ap}}
+
+Si no nos crees, te contamos en un par de líneas como configurar tu
+propio \emph{ROGUE AP} y comprobarlo por ti mismo. A modo de prueba solo
+vamos a configurar el punto de acceso. En un caso real tenéis que hacer
+algunas cosas más como configurar un servidor de nombres o un portal web
+cautivo si es el caso. Pero es eso material para otro artículo.
+
+Para el caso de uno de estas WIFIs abiertas, solo tenéis que instalar el
+paquete \verb!hostapd! y utilizar un fichero de
+configuración como este:
+
+\begin{lstlisting}
+interface=wlan0
+ssid=EstarBacks
+hw_mode=g
+channel=10
+auth_algs=1
+\end{lstlisting}
+
+Donde \verb!wlan0! es vuestro interfaz de red wifi.
+Si llamamos a ese fichero \verb!estarbacks.conf! solo
+tendríamos que:
+
+\begin{lstlisting}
+hostapd estarbacks.conf
+\end{lstlisting}
+
+Easy\ldots{}
+
+\hypertarget{que-es-una-vpn}{%
+\sectiontext{white}{black}{¿QUÉ ES UNA VPN?}\label{que-es-una-vpn}}
+
+Cuando accedemos a un sitio web utilizando HTTPS, todo nuestro tráfico
+está cifrado. Eso significa que nisiquiera nuestro proveedor de
+internet, o alguien que se haya colado en nuestra wifi puede ver
+nuestros correos o nuestras transacciones bancarias.
+
+Sin embargo, como acabamos de ver, compartir red wifi con otras personas
+abre la puerta a ataques MiTM como los \emph{Rogue AP} de los que
+acabamos de hablar además de permitir a cualquiera en la misma red (lo
+que incluye vuestro ISP), obtener información de los sitios que
+visitamos y cuando lo hacemos\ldots{} por ejemplo, monitorizando las
+peticiones DNS.
+
+\medskip
+\hrule
+{\color{darkgray}
+\begin{quote}
+\verb!DNS! es el acónimo de \emph{Domain Name
+Server}, es el servicio que nos permite localizar sitios web con nombres
+como \verb!www.google.com!. Para hacer ello, tenemos
+que enviarle una petición con el nombre que nos interesa, y el DNS nos
+devolverá la información que necesitaremos para encontrarlo.
+Monitorizando esas peticiones que no están cifradas, cualquiera en
+nuestra red puede saber que sitios visitamos. Existe algo llamado
+\href{https://es.wikipedia.org/wiki/Domain_Name_System_Security_Extensions}{DNSSEC}
+pero no está demasiado extendido todavía.
+\end{quote}
+}
+\hrule
+\medskip
+
+En estos casos podemos utiliza una VPN o \emph{Virtual Private Network}
+(Red Privada Virtual). Una VPN nos permite realizar una conexión con un
+servidor predeterminado (el servidor VPN) y acceder a internet como si
+lo hiciéramos desde ese servidor. Nuestra conexión al servidor VPN está
+cifrada, pero todo lo que sale de él ya no.
+
+Es más, un servidor VPN no es más que un servicio MiTM y la VPN que
+elijamos tendrá acceso completo a todo nuestro trafico, el cual pasará
+sin excepción por sus servidores. Una vez más todo el tráfico desde
+nuestro dispositivo, hasta el servidor VPN estará cifrado. Esto
+significa que nuestro ISP o cualquiera conectado a la misma red (nuestra
+red inalámbrica casera o cualquier red pública) no podrá ver nuestro
+trafico, ni siquiera los servidores a los que nos conectamos\ldots{}
+pero el servidor VPN lo verá todo.
+
+El tráfico HTTPS seguirá, en teoría, siendo seguro, ya que el cifrado es
+extremo a extremo con el servidor web al que nos conectamos, sin
+embargo, es importante observar que implementar un ataque MitM para ver
+todo el tráfico HTTPS en un servidor VPN es trivial.
+
+Más allá de esto, desde un punto de vista criptográfico, una VPN
+funciona de la misma forma que el resto de tecnologías que hemos
+discutido hasta el momento, usando un algoritmo de encriptación
+simétrico y distintas posibilidades para negociar/calcular/distribuir la
+clave de cifrado del tráfico. Las VPN, a diferencia de las otras
+tecnologías que hemos visto hasta la fecha permiten autenticar al
+cliente. Es decir, nuestro dispositivo debe puede tener un certificado
+válido para poder conectar al servidor VPN y de esta forma prevenir
+conexiones no deseadas.
+
+\hypertarget{como-de-seguros-son-estos-sistemas}{%
+\sectiontext{white}{black}{¿CÓMO DE SEGUROS SON ESOS SISTEMAS?}\label{como-de-seguros-son-estos-sistemas}}
+
+Quizás te estés haciendo esa pregunta en estos momentos, y la respuesta
+es: son seguros hasta la fecha. Todos los algoritmos de cifrado se
+pueden romper, la cuestión es si merece el tiempo y el esfuerzo. Así
+que, que un algoritmo de cifrado sea seguro, solamente significa que,
+con la tecnología actual, descifrar el mensaje llevará un tiempo que
+invalida el beneficio que se puede obtener de este proceso.
+
+Si un algoritmo requiere de 1 año de procesado para poder descifrar un
+mensaje, es muy probable que cuando obtengamos el mensaje descifrado,
+este ya no nos resulte de ninguna utilidad. Puede contener información
+que ya ha sucedido, o que ha cambiado y carezca de interés cuando se
+obtiene.
+
+\medskip
+\hrule
+{\color{darkgray}
+\begin{quote}
+El tiempo en el que esa información es útil, o si lo preferís, el tiempo
+en el que el ataque sería efectivo se conoce como \textbf{ventana de
+oportunidad} y no es un concepto exclusivo de la seguridad informática.
+\end{quote}
+}
+\hrule
+\medskip
+
+Pero para entender lo que significa que un algoritmo requiera 1 año de
+procesado para ser decifrado, tenemos que entender como se pueden
+descifrar estos algoritmos. Y la respuesta, en el caso general, es
+obteniendo la clave.
+
+\hypertarget{ataque-de-fuerza-bruta}{%
+\sectiontext{white}{black}{ATAQUE DE FUERZA BRUTA}\label{ataque-de-fuerza-bruta}}
+
+La forma más sencilla de obtener la clave de un mensaje cifrado es
+utilizando la fuerza bruta, es decir, probar una a una todas las
+posibles claves hasta que una funcione. Y este es el método al que se
+refieren en la literatura cuando dicen que descifrar un mensaje
+codificado con AES-256 llevaría trillones de años. Estos cálculos
+suponen que no sabemos absolutamente nada sobre la clave y que tenemos
+que probarlas todas. El número que se suele dar es el límite superior,
+si bien el valor medio sería bastante menor\ldots. suponiendo que hemos
+generado una clave aleatoria.
+
+Esto es importante que lo tengamos claro. Que un algoritmo diga que
+require de 1 trillón de años para romper la clave, no significa que la
+clave no se pueda romper. Eso dependerá de lo buena que sea la clave que
+utilizamos.
+
+Imaginad que intentamos un ataque de fuerza bruta contra un algoritmo
+AES-256. Este algoritmo require de una clave de 256 bits o 32 bytes. En
+un ataque de fuerza bruta comenzaríamos con un valor de 32 ceros y
+terminaríamos con un valor de 32 255s\ldots. Si elegimos como clave los
+32 zeros\ldots{} un ataque de fuerza bruta encontraría la clave
+inmediatamente.
+
+\hypertarget{ataque-de-diccionario}{%
+\sectiontext{white}{black}{ATAQUE DE DICCIONARIO}\label{ataque-de-diccionario}}
+
+Los ataques de fuerza bruta no son muy efectivos en el mundo real, a no
+ser que el algoritmo sea muy básico o la clave muy corta, sin embargo,
+la mayoría de la gente que no utiliza un gestor de claves, va a utilizar
+contraseñas fáciles de recordar, es decir, utilizará palabras conocidas
+que le resulten fáciles de recordar, en lugar de contraseñas aleatorias,
+mucho más seguras pero imposibles de recordar. A día de hoy,
+\verb!password!, \verb!123456! o
+\verb!qwerty! siguen siendo de las contraseñas más
+utilizadas aún en 2024.
+
+\begin{entradilla}
+{\em Los ataques de diccionario son mucho más efectivos de lo que podría parecer}
+\end{entradilla}
+
+En estos casos es donde un ataque de diccionario resulta útil. En lugar
+de probar todas las combinaciones posibles de caracteres para una
+determinada clave, el atacante utiliza un diccionario con palabras
+comunes y una serie de reglas con las que derivar variaciones de esas
+palabras\ldots{} por ejemplo usar la primera letra en mayúscula o
+minúscula, o utilizar dos palabras del diccionario seguidas o separadas
+por algún carácter de puntuación.
+
+Si este es el caso, las posibilidades de romper la clave se reducen
+drásticamente y el algoritmo pierde gran parte de su eficiencia, ya que
+el espacio de búsqueda de claves, o si lo preferís, el número de claves
+que tenemos que probar son muchísimas menos.
+
+\hypertarget{almacenando-claves}{%
+\sectiontext{white}{black}{ALMACENANDO CLAVES}\label{almacenando-claves}}
+
+Cuando protegemos algo con una clave, hay algún programa en el ordenador
+que comprueba que la clave que introducimos es la correcta. Obviamente,
+para poder hacer esto, el programa necesita conocer la clave, y por lo
+tanto almacenarla en algún lado en el ordenador.
+
+Los famosos \emph{data leaks} o filtraciones de datos no son más que
+ello, volcados de los ficheros en los que se almacena información
+relativa a los usuarios de un sistema, lo que puede incluir su
+contraseña o no. Por eso, es importante almacenar la mínima información
+posible e intentar hacerlo de una forma que no pueda utilizarse
+directamente.
+
+\begin{entradilla}
+{\em En lugar de almacenar las claves muchos sistemas almacenan el hash asociado a esa clave}
+\end{entradilla}
+
+En los viejos tiempos, las claves se almacenaban en texto plano, y se
+hacía uso de los permisos del sistema de ficheros para asegurarnos que
+solo el superusuario pudiera ver las claves. En aquellos tiempo,
+conseguir el fichero de claves era el objetivo de un atacante, puesto
+que con él, tendría acceso al sistema como cualquiera de los usuarios
+registrados en él.
+
+Muy pronto se vio que esa forma de proceder entrañaba muchos riesgos,
+así alguien bastante listo se le ocurrió lo siguiente: \emph{``Si en
+lugar de almacenar la clave como texto plano, que tal si hacemos uso de
+nuestras queridas funciones HASH y almacenamos ese valor en su lugar.''}
+
+De esta forma, el programa a cargo de la autenticación solamente
+almacena el resultado de aplicar una función hash a la clave. Cuando el
+usuario introduce su clave, el programa aplicará el mismo algoritmo al
+valor introducido por el usuario y si coincide con el hash
+almacenado\ldots. Voilá ACCESO!!!!. Con este sistema, aun si un intruso
+consigue hacerse con el fichero de claves, lo que obtendrá será un
+montón de valores HASH, los cuales, como sabemos, son muy difíciles de
+revertir.
+
+Una vez más, como ya hemos visto antes, podemos generar una tabla de
+códigos hash de contraseñas comunes y simplemente buscar la
+correcta\ldots{} Y esto es algo que funciona si utilizas una contraseña
+muy sencilla. Existen bases de datos en internet con listas de códigos
+HASH y la contraseña asociada.
+
+\hypertarget{tablas-arco-iris}{%
+\sectiontext{white}{black}{TABLAS ARCO IRIS}\label{tablas-arco-iris}}
+
+Sin embargo, generar una de esas bases de datos para un determinado
+diccionario y reglas de generación requiere muchísimo espacio. Recordad
+que las funciones hash crean una salida totalmente diferente simplemente
+con variar un caracter de los datos de entrada. Eso significa que, por
+cada palabra del diccionario tendremos que almacenar un montón de hashes
+(o calcularlos en tiempo real lo que haría que todo fuera muchísimo más
+lento) para las posibles variaciones. Por ejemplo, dada la contraseña
+\verb!password!, una de las más utilizadas,
+tendríamos que generar y almacenar hashes para:
+\verb!password Password PASSword passWORD ...!
+
+Para solucionar este problema, que una vez más consiste en reducir el
+espacio de búsqueda, en este caso de hashes en vez de claves, se crearon
+las denominadas tablas arco iris.
+
+Puesto que este es un artículo de divulgación, no vamos a explicaros
+como se genera y funciona una tabla arco iris, en el futuro podemos
+incluir más artículos sobre criptografía y profundizar en los algoritmos
+específicos que estamos introduciendo aquí. Así que lo que tenéis que
+sabes sobre este tema es:
+
+\begin{itemize}
+\item
+  Las tablas arco iris se utilizan para revertir funciones hash
+  (normalmente cuando la función hash se utiliza para ocultar una clave)
+\item
+  Las tablas arco iris son específicas para cada algoritmo hash. Una
+  tabla arco iris para MD5 no funcionará con un hash SHA-2
+\item
+  El tiempo requerido para encontrar una clave (revertir el hash)
+  depende del tamaño máximo de la clave. Para claves por encima de un
+  determinado valor, tanto el tiempo para generar la tabla como el
+  tiempo medio para encontrar una clave son intratables.
+\end{itemize}
+
+\hypertarget{salteando-claves}{%
+\sectiontext{white}{black}{SALTEANDO CLAVES}\label{salteando-claves}}
+
+Uno de los problemas de almacenar hashes de claves es que, dos claves
+idénticas producen el mismo hash. Es decir, podemos saber si dos
+usuarios tienen la misma clave aunque no sepamos cual es y eso puede
+desembocar en otro tipo de ataque sobre uno de los usuarios con el que
+obtener acceso al otro, una vez hayamos encontrado la clave y,
+potencialmente llevar a cabo un escalado de privilegios (si el segundo
+usuario tiene más privilegios en el sistema que el segundo).
+
+Para evitar esto la técnica más común es añadir una pizca de sal a la
+clave. La sal no es más que una valor aleatorio que se añade a la clave
+y que no tiene porque ser secreto. De hecho, si fuera secreto no sería
+posible recuperar la clave\ldots{} o si lo preferís, simplemente
+tendríamos una clave más larga que el usuario tendría que proporcionar.
+
+Así que lo que hacemos al saltear las claves calcular:
+
+\begin{lstlisting}
+HASH (clave + sal)
+\end{lstlisting}
+
+Donde la clave, es la \verb!clave! del usuario, y
+\verb!sal! es un valor aleatorio que almacenaremos
+junto con la clave. Si nuestra \verb!sal! es un
+número de 8 bits, una misma clave puede ser almacenada 256 veces con
+valores totalmente diferentes. Recordad que una función hash produce un
+valor totalmente diferente con solo cambiar un bit de la secuencia
+original.
+
+El sistema almacena entonces el valor de la
+\verb!sal! y el hash de la concatenación de la clave
+y la \verb!sal!. De esta forma, aun cuando sepamos el
+valor de \verb!sal! tendremos un valor de hash
+arbitrario y no podremos decir si pertenece son la misma clave o no.
+
+\begin{entradilla}
+{\em Añadir un valor al principio de la clave (Salt) antes de calcular su hash complica mucho la obtención de la clave original}
+\end{entradilla}
+
+Veamos un simple ejemplo, utilizando la utilidad
+\verb!md5sum! que calcula el hash de una serie de
+datos utilizando el algoritmo MD5.
+
+
+
+\begin{lstlisting}
+$ md5sum <<< Password
+29f33cab54c2a8858885b95d8fbb7ff1  -
+\end{lstlisting}
+
+Dos usuario con la contraseña \verb!Password!
+generarán la secuencia de números de más arriba. Idéntica para los dos.
+Pero si ahora a añadimos la \verb!sal!
+
+\begin{lstlisting}
+$ md5sum <<< 1Password
+30ef38234de76799effaa54483b04d26  -
+$ md5sum <<< 2Password
+de7a1cc6db1bb1beeb23df8c667a9bfb  -
+\end{lstlisting}
+
+
+Como podéis ver, incluso si conocemos los valores de la
+\verb!sal!, en este caso \verb!1!
+y \verb!2!, no podemos decir si ambos usuarios tienen
+la misma contraseña. Si dos usuarios utilizaran el mismo valor de
+\verb!sal!, solamente podríamos decir que tienen
+contraseñas diferentes, con lo cual, conociendo la
+\verb!sal! o no, no podemos determinar si dos
+contraseñas son iguales.
+
+El uso de \verb!sal! hace que las tablas arco iris no
+funcionen cuando utilizamos valores altos. La razón es, grosso modo, que
+el atacante tendrá que calcular tablas arco iris para todas las claves y
+los valores \verb!sal! permitidos. Si estos valores
+son muy grandes, el tamaño de la tabla se dispara haciendo que la
+generación y el uso de la tabla requiera demasiado tiempo.
+
+\hypertarget{ataques-de-reproducciuxf3n}{%
+\sectiontext{white}{black}{ATAQUES DE REPRODUCCIÓN}\label{ataques-de-reproducciuxf3n}}
+
+Romper la clave es una forma de acceder ya sea a datos cifrados o a
+algún servicio que utilice una algoritmo criptográfico en su proceso de
+autorización. Bueno hay más casos, pero estos dos son quizás los más
+ilustrativos. Ya hemos visto como los ataques de fuerza bruta o basados
+en diccionario (las tablas arco iris se pueden ver como un caso especial
+de estos últimos) se pueden utilizar para esto, sin embargo, hay otras
+formas de burlar las medidas de seguridad criptográficas.
+
+\begin{entradilla}
+{\em A veces conseguir acceso a un sistema es tan sencillo como capturar el tráfico de una conexión legítima y reproducirlo desde otra máquina}
+\end{entradilla}
+
+Vamos a utilizar a modo de ejemplo un sistema de autenticación de una
+página web. La típica página de login. He imaginemos que un atacante
+puede ver el tráfico entre el browser y el servidor web, ya sea porque
+el sitio web utiliza \verb!HTTP! en lugar de
+\verb!HTTPS! o porque hemos sido víctimas de una
+ataque \emph{MiTM}. Veamos que opciones tenemos.
+
+La primera opción es preguntar al usuario por la clave en el formulario
+de la página y enviarla tal cual al servidor. El campo de la clave será
+de tipo \verb!password! para que solo se vean
+puntitos cuando el usuario escribe, y el servidor almacena los hash de
+las claves en un fichero local, de tal forma que aunque el servidor sea
+comprometido, un atacante no puede recuperar las claves de los
+usuario\ldots{} Sin embargo, en este escenario, la clave que el usuario
+ha escrito se enviará en claro (es decir, tal cual fue escrita) al
+servidor. Esta opción no parece la mejor ya que cualquiera que pueda ver
+el tráfico (y ya hemos visto algunas formas en las que eso se puede
+conseguir), verá la clave.
+
+Vamos a por la opción 2. Añadimos un poco de complejidad al sistema e
+incorporamos código JavaScript en el cliente para que calcule el hash de
+la clave y, en lugar de enviarla como texto plano, enviaremos el hash.
+Ahora el servidor ya no recibe la clave original, sino el hash ya
+calculado y puede comparar directamente con su fichero de claves
+locales. Si bien esto puede parecer más seguro tenemos dos problemas
+fundamentales. El primero es que ahora, si alguien consigue el fichero
+de claves del servidor no necesita descifrarlas, simplemente puede
+utilizar el hash que está almacenado en el fichero.
+
+Esto puede parecer un \emph{Fallo Épico}, pero estrictamente hablando,
+el sistema funciona perfectamente, ya que un atacante no tiene forma de
+obtener la clave del usuario, lo cual era el objetivo de todo este
+sistema. Sin embargo, el sistema falla estrepitosamente como método de
+autenticación, introduciendo un fallo de seguridad que nos permite el
+acceso al sistema sin necesidad de conocer la clave.
+
+Es más, el segundo problema de este sistema es que\ldots{} no
+necesitamos obtener el fichero de claves hasheadas del servidor, podemos
+utilizar un ataque de reproducción de tráfico, o como dicen los
+americanos \emph{Traffic Replay}. Solo necesitamos capturar de la red el
+tráfico asociado a los datos enviados al pulsar el botón de login, y
+re-enviar ese tráfico capturado al servidor cada vez que queramos
+acceder al sistema. Como podéis ver, no conocemos, ni tenemos una forma
+fácil de conocer la clave de los usuarios. No conocemos, ni tenemos una
+forma fácil de obtener el fichero con los hashes de los usuario\ldots{}
+pero no necesitamos nada de eso para acceder al sistema.
+
+\hypertarget{arrojando-un-guante}{%
+\sectiontext{white}{black}{ARROJANDO UN GUANTE}\label{arrojando-un-guante}}
+
+Si bien podéis encontrar problemas como los descritos más arriba en
+sistema reales (la opción 1 es literalmente el
+\href{https://en.wikipedia.org/wiki/Password_Authentication_Protocol}{Password Authentication Protocol}),
+y definitivamente en desarrollos de programadores principiantes, esos
+problemas fueron muy obvios desde el principio y enseguida se propuso
+una alternativa. El sistema de autenticación de desafío-respuesta
+(\emph{Challenge-Response Authentication}). Este fue uno de las primeras
+opciones disponibles para aplicaciones web que necesitaban poder
+autenticar a sus usuarios.
+
+\begin{entradilla}
+{\em Los sistemas de autenticación del tipo desafío-respuesta son una posible solución a los ataques de reproducción}
+\end{entradilla}
+
+El funcionamiento es relativamente sencillo, consiste en generar lo que
+se conoce como \verb!nonce!. Un
+\verb!nonce! es un número arbitrario que es utilizado
+solamente una vez. La idea es que, lo que sea que tenga que enviar el
+browser al servidor web para autenticarse, sea diferente cada vez que un
+usuario se autentica, y de esta forma, prevenir los ataques de
+reproducción de tráfico.
+
+\begin{entradilla}
+{\em CHAP es un sistema de autenticación desafío-respuesta que se utilizaba a menudo en los accesos a Internet via línea teléfonica a finales del siglo pasado}
+\end{entradilla}
+
+Hay distintas variantes, pero en general el sistema funciona de la
+siguiente forma:
+
+\begin{itemize}
+\item
+  El servidor enviar un desafío al cliente. El desafío debe ser algún
+  valor especial por ejemplo la fecha actual y un número aleatorio.
+  Llamemos a ese valor \verb!CHA!.
+\item
+  El cliente recibe el desafío \verb!CHA! y le añade
+  alguna información secreta compartida con el servidor. Por ejemplo su
+  clave (\verb!PASS!). Calcula su valor hash y envía
+  el resultado al servidor, es decir,
+  \verb!HASH(CHA+PASS)!
+\item
+  El servidor recalcula el hash del valor que envió mas el valor secreto
+  que comparte con el cliente y lo compara con el recibido a través de
+  la red.
+\end{itemize}
+
+Con un esquema como este, la respuesta que envía el cliente para
+autenticarse es siempre distinta, ya que el desafío que recibe el
+cliente también es siempre distinto, y por lo tanto un ataque de
+reproducción de tráfico no funcionaria. Este es el esquema utilizado por
+\verb!CHAP! \emph{Challenge-Handshake Authentication
+Protocol}, el cual puede que te resulte familiar si tienes unos añitos y
+te has conectado a internet con un modem sobre un par de cobre. Sin
+embargo, este sistema necesita que tanto el cliente como el servidor
+almacenen la clave en claro (el valor de
+\verb!PASS!), si bien, la clave no se envía nunca por
+la red durante la autenticación.
+
+Existen protocolos más elaborados para la autenticación de usuario, si
+bien, el principio de funcionamiento es fundamentalmente el mismo
+
+\hypertarget{conclusiones}{%
+\sectiontext{white}{black}{CONCLUSIONES}\label{conclusiones}}
+
+Hasta aquí esta breve introducción a la criptografía y algunas de sus
+aplicaciones diarias (aunque muchas de ellas no son directamente
+visibles). También hemos afrontado algunos casos más prácticos y
+aprendido un poco más sobre las vulnerabilidades de estos sistemas y
+como de seguros son. Hay muchos más conceptos relacionados con la
+criptografía, la mayoría relacionados con el mundo de la
+seguridad\ldots{} pero eso lo dejaremos para otro artículo.
+
+\end{multicols}

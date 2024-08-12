@@ -1,0 +1,469 @@
+\hypertarget{geek:bf02-1}{}\label{geek:bf02}
+\pagestyle{geek}
+
+\rput(7.9,-0.5){\resizebox{!}{14cm}{{\epsfbox{images/bf02-header.eps}}}}
+
+\psset{fillstyle=solid}
+\psframe[fillcolor=black,opacity=0.7](2,-4.5)(17,0)
+
+
+
+
+
+% -------------------------------------------------
+% Cabecera
+\begin{flushright}
+
+
+{\color{pink}\mtitle{14cm}{Intérprete de BraninFuck parte II}}
+
+\msubtitle{8cm}{Implementando el lenguaje}
+
+{\sf\color{white}{ por Don Bit0}}
+
+%{{\psset{linecolor=black,linestyle=dotted}\psline(-12,0)}}
+\end{flushright}
+
+
+\vspace{2mm}
+% -------------------------------------------------
+\lstset{language=C,frame=tb,framesep=5pt,basicstyle=\scriptsize}
+
+\intro{introcolor}{E}{n la entrega anterior aprendimos a programar en BrainF*ck y las bases
+de como programar los procesadores RISC-V en ensamblador para Linux.
+También vimos como configurar rápida y fácilmente un sistema en el que
+desarrollar y probar nuestros programas. En esta entrega vamos a
+continuar con nuestra implementación del intérprete de BrainFuck.}
+
+\begin{multicols}{2}
+
+Vamos a comenzar con una sencilla modificación con la que eliminar los
+caracteres de control como tabuladores o retornos de carro y así
+introducir algunas instrucciones más y mostraros la base para sanear la
+entrada de datos de nuestro programa. En el caso general deberíamos
+eliminar cualquier cosa que no sea una de las instrucciones del
+lenguaje.
+
+\hypertarget{filtrando-caracteres-de-control}{%
+\sectiontext{white}{black}{FILTRANDO CARACTERES DE CONTROL}\label{filtrando-caracteres-de-control}}
+
+El código sería algo así:
+
+\begin{lstlisting}
+_start:
+    # Lee datos desde entrada standard
+    la a1, prog
+    move t1, zero
+    li t2, 0x20                           *** NUEVO!!!!
+bucle01:
+    li a7, 63
+    li a0, 0
+    li a2, 1
+    ecall
+    # Si <=0 (EOF) terminamos bucle
+    blez a0, cont01
+
+    lb t0, 0(a1)                            *** NUEVO!!!
+    ble t0,t2, bucle01  # Elimina espacios  *** NUEVO!!!
+
+    add t1, t1, 1
+    add a1, a1, 1
+    j bucle01
+
+cont01:
+\end{lstlisting}
+
+Os hemos marcado las líneas añadida para que sea más fácil seguir la
+explicación, Comencemos por la instrución \verb!lb!
+\emph{Load Byte}. Esta instrucción nos permite cargar en un registro un
+byte leído desde una posición de memoria. El parámetro
+\verb!0(a1)! se puede leer como: el contenido de la
+posición de memoria \verb!a1 + 0!.
+
+\begin{entradilla}
+{\em La instrucción BLE r1,r2,label salta a label si el primer registro es menor o igual que el segundo}
+\end{entradilla}
+
+También podemos ver la instrucción \verb!ble! que
+como os podéis imaginar realiza un salto si el primer parámetro es menor
+o igual (\emph{Less or Equal}) que el segundo. En este caso nos estamos
+saltando todos los caracteres menores que \verb!0x20!
+que representa el espacio. Estos valores bajos del código ASCII se
+utilizan para representar secuencias de control como el retorno de carro
+o el tabulador.
+
+Como podéis ver, en el caso de que el valore leído sea una secuencia de
+control no incrementamos el puntero dentro de nuestro buffer de lectura
+de tal suerte que la siguiente llamada a
+\verb!SYS\_read! volverá a escribir el caracter en la
+posición actual.
+
+\hypertarget{preparuxe1ndonos-para-la-interpretaciuxf3n}{%
+\sectiontext{white}{black}{PREPARÁNDONOS PARA LA INTERPRETACIÓN}\label{preparuxe1ndonos-para-la-interpretaciuxf3n}}
+
+Para poder interpretar nuestros programas en BrainFuck, tendremos que
+leer los distintos comandos uno a uno, y según el comando realizar una
+operación u otra. Así que el siguiente paso que vamos a hacer es
+imprimir nuestro programa en memoria, pero caracter a caracter, a forma
+de paso previo para la implementación de nuestros programas.
+
+Para ello, eliminamos la llamada a \verb!SYS_write!
+con el tamaño del buffer, por un bucle en el que imprimiremos el buffer
+byte a byte. El fragmento de código sería algo así:
+
+\begin{lstlisting}
+cont01:
+    # t1 contiene longitud del programa
+
+    # Muestra la cadena volcada desde memoria
+    # Este es el bucle base de ejecución
+    la t2, prog     # Contador de programa
+    add t3, t2, t1  # Apunta al final del programa
+
+bucle02:
+    li a7, 64
+    move a1, t2
+    li a2, 1
+    ecall
+
+    add t2, t2, 1       # Incrementa contador del programa
+    blt t2, t3, bucle02 # Mientras no alcancemos el final, 
+                        # repetimos
+exit:
+\end{lstlisting}
+
+Puesto que ya hemos introducido todos los elementos vamos a comentar
+brevemente el código. En el bucle principal de ejecución vamos a
+utilizar los registros temporales. Por el momento esto es lo que
+tenemos:
+
+\begin{itemize}
+\item
+  \verb!t1! contiene la longitud del programa a
+  ejecutar (lo calculamos al leer la entrada de usuario).
+\item
+  \verb!t2! va a ser el puntero de programa, el que
+  iremos moviendo por el buffer para ir leyendo cada uno de los comandos
+  que conforman el programa.
+\item
+  \verb!t3! representa la dirección inmediatamente
+  después del último comando del programa. No es más que el inicio del
+  buffer + \verb!t1!, así que, realmente, no
+  necesitaremos \verb!t1! más en el resto del
+  programa.
+\end{itemize}
+
+Una vez inicializados \verb!t2! y
+\verb!t3!, el bucle principal irá incrementando el
+valor de \verb!t2! hasta que sea igual a
+\verb!t3!, momento en el cual habremos alcanzado el
+final del programa y debemos parar su ejecución.
+
+
+\hypertarget{implementando-los-comandos-buxe1sicos}{%
+\sectiontext{white}{black}{IMPLEMENTANDO LOS COMANDOS BÁSICOS}\label{implementando-los-comandos-buxe1sicos}}
+
+Ahora que ya podemos extraer los comandos de nuestro buffer de programa,
+vamos a interpretarlos. Esto es muchísimo más fácil de lo que parece.
+Primero tendremos que añadir una nueva variable local para poder acceder
+a la memoria de datos.
+
+\begin{lstlisting}
+cont01:
+    # t1 contiene longitud del programa
+
+    # Muestra la cadena volcada desde memoria
+    # Este es el bucle base de ejecución
+    la t2, prog     # Contador de programa
+    la t6, data     # Puntero de datos
+    add t3, t2, t1  # Apunta al final del programa
+\end{lstlisting}
+
+Sin sorpresas. \verb!data! es otra etiqueta en la
+sección \verb!.data! definiendo un buffer en el que
+almacenar datos. En nuestro programa, el puntero a la memoria de datos
+se almacenará en el registro temporal \verb!t6!.
+
+Ahora veamos como interpretar los comandos básicos
+(\verb!+-<>,.[]!).
+
+\begin{lstlisting}
+bucle02:
+    lb t4, 0(t2)   # Leemos comando de memoria de programa
+
+    li t5, '<'
+    beq t4, t5, inc_data_ptr
+    li t5, '>'
+    beq t4, t5, dec_data_ptr
+    li t5, '+'
+    beq t4, t5, inc_data
+    li t5, '-'
+    beq t4, t5, dec_data
+    li t5, '.'
+    beq t4, t5, print_data
+    li t5, ','
+    beq t4, t5, read_data
+    li t5, '['
+    beq t4, t5, inicia_bucle
+    li t5, ']'
+    beq t4, t5, fin_bucle
+
+    # Error command desconocido va aquí
+    j cont02
+\end{lstlisting}
+
+La instrucción \verb!lb! ya la conocemos. En esta
+ocasión estamos leyendo en el registro \verb!t4! el
+operador BrainFuck al que apunta el puntero de programa
+\verb!t2!.
+
+Puesto que RISC-V solo ofrece instrucciones de salto condicional donde
+el condicional se debe aplicar sobre dos registros, debemos cargar el
+valor que queremos comparar en un registro antes de poder procesarlo.
+Los distintos comandos los cargamos en \verb!t5! y
+usando la instrucción \verb!beq! (\emph{Branch if
+EQual} \emph{Salta si es Igual}), comparamos los dos valores y si
+coincide saltamos a una determinada etiqueta en nuestro programa. En un
+segundo implementaremos esas etiquetas.
+
+Si el valor leído de la memoria no coincide con ningún comando, tenemos
+la opción de mostrar un error, si bien, en este caso es mejor ignorar el
+caracter. De esta forma podemos incluir comentarios en nuestros
+programas \verb!bf! , simplemente escribiendolos. Por
+ejemplo:
+
+\begin{lstlisting}
+,     Lee un valor y lo almacena en DP
+++    Suma 2 al valor leido
+.     Imprimimos el valor
+\end{lstlisting}
+
+Para comprobar esto, vamos a incluir la siguiente implementación
+temporal para nuestros comandos. Simplemente mostraremos una cadena que
+representa el tipo de operación. Veremos como los comentarios
+simplemente desaparecen.
+
+\hypertarget{comprobando-que-filtramos-los-comentarios}{%
+\sectiontext{white}{black}{COMPROBANDO QUE FILTRAMOS LOS COMENTARIOS}\label{comprobando-que-filtramos-los-comentarios}}
+
+La implementación de los comandos básicos es muy sencilla. Aquí tenéis
+el código, de los dos primeros comandos. El resto son igual, simplemente
+cambiando el valor que cargamos en \verb!a1!
+
+\begin{lstlisting}
+inc_data_ptr:
+    la a1, label1
+    j cont02
+dec_data_ptr:
+    la a1, label2
+    j cont02
+
+cont02:
+
+    li a7, 64
+    li a0, 1
+    li a2, 10
+    ecall
+
+    add t2, t2, 1       # Incrementa contador del programa
+    blt t2, t3, bucle02 # Mientras
+\end{lstlisting}
+
+Al final del código podemos añadir las etiquetas. EN este caso se trata
+de literales o valores de solo lectura, así que los podemos dejar en la
+sección \verb!.text!.
+
+\begin{lstlisting}
+label1:.asciz "Comando <\n"
+label2:.asciz "Comando >\n"
+label3:.asciz "Comando +\n"
+label4:.asciz "Comando -\n"
+label5:.asciz "Comando .\n"
+label6:.asciz "Comando ,\n"
+label7:.asciz "Comando [\n"
+label8:.asciz "Comando ]\n"
+\end{lstlisting}
+
+Si ahora ejecutáis el intérprete, veréis como podéis escribir lo que
+queráis entre medias del programa, solamente los caracteres que forman
+parte del lenguaje serán interpretados (tened cuidado con las comas y
+puntos).
+
+\columnbreak
+
+\hypertarget{implementando-los-comandos-buxe1sicos-1}{%
+\sectiontext{white}{black}{IMPLEMENTANDO LOS COMANDOS BÁSICOS DE VERDAD}\label{implementando-los-comandos-buxe1sicos-1}}
+
+Comenzaremos implementando los comandos de manipulación de la memoria de
+datos.
+
+\begin{lstlisting}
+inc_data_ptr:    # Comando >
+    add t6, t6, 1
+    j cont02
+dec_data_ptr:    # Comando <
+    add t6, t6, -1
+    j cont02
+inc_data:        # Comando +
+    lb t1, 0(t6)
+    add t1, t1, 1
+    sb t1, 0(t6)
+    j cont02
+dec_data:         # Comando -
+    lb t1, 0(t6)
+    add t1, t1, -1
+    sb t1, 0(t6)
+    j cont02
+\end{lstlisting}
+
+La nueva instrucción que aparece en este caso es
+\verb!sb! que os podéis imaginar que hace. Si,
+almacena un byte en memoria (\emph{Store Byte}). Los comandos
+\verb!<! y \verb!>! simplemente
+modifican el valor de \verb!t6!, nuestro puntero de
+datos. Nótese que estas funciones deberían de comprobar que el valor
+\verb!t6! permanece en rango.
+
+Los comandos \verb!+! y \verb!-!
+leen el byte en la posición de memoria apuntada por
+\verb!t6!, le suman \verb!1!, y lo
+vuelven a almacenar. Más fácil no se pude.
+
+Veámos ahora los comandos \verb!,! y
+\verb!.!, si bien, a estas alturas deberíais de ser
+capaces de implementarlos vosotros mismos.
+
+\begin{lstlisting}
+print_data:
+    li   a7, 64
+    li   a0, 1
+    move a1, t6
+    li   a2, 1
+    ecall
+
+    j cont02
+read_data:
+    li   a7, 63
+    li   a0, 0
+    move a1, t6
+    li   a2, 1
+    ecall
+
+    j cont02
+\end{lstlisting}
+
+Si, una vez más simplemente llamamos a
+\verb!SYS\_read! y
+\verb!SYS\_write! pero esta vez utilizando como
+puntero la memoria de datos. Con este último cambio podremos ejecutar
+cualquier programa \verb!BF! que no utilice bucles.
+
+\hypertarget{el-intuxe9rprete-por-ahora}{%
+\sectiontext{white}{black}{EL INTÉRPRETE POR AHORA}\label{el-intuxe9rprete-por-ahora}}
+
+Para terminar esta entrega y ya que hemos hecho muchas cambios en
+distintas partes del programa, os dejamos la versión actual y completa
+del código para los que os hayáis podido perder.
+
+\begin{lstlisting}[language=C]
+    .text
+    .global _start
+    .equ MEM_SIZE, 4096
+    
+_start:
+    # Lee datos desde entrada standard
+    la    a1, prog
+    move  t1, zero
+    li    t2, 0x20
+bucle01:    
+    li     a7, 63
+    li     a0, 0
+    li     a2, 1
+    ecall
+    # Si <=0 (EOF) terminamos bucle
+    blez   a0, cont01
+    
+    lb     t0, 0(a1)
+    ble    t0, t2, bucle01  # Elimina espacios
+    
+    add    t1, t1, 1
+    add    a1, a1, 1
+    j      bucle01
+    
+cont01:
+    # Este es el bucle base de ejecución
+    la     t2, prog     # Contador de programa
+    la     t6, data     # Puntero de datos
+    add    t3, t2, t1  # Apunta al final del programa
+
+bucle02:    
+    lb     t4, 0(t2)
+    li     t5, '<'
+    beq    t4, t5, inc_data_ptr
+    li     t5, '>'
+    beq    t4, t5, dec_data_ptr
+    li     t5, '+'
+    beq    t4, t5, inc_data
+    li     t5, '-'
+    beq    t4, t5, dec_data
+    li     t5, '.'
+    beq    t4, t5, print_data
+    li     t5, ','
+    beq    t4, t5, read_data
+    j      cont02
+inc_data_ptr:
+    add    t6, t6, 1
+    j      cont02
+dec_data_ptr:
+    add    t6, t6, -1
+    j      cont02
+inc_data:
+    lb     t1, 0(t6)
+    add    t1, t1, 1
+    sb     t1, 0(t6)
+    j      cont02
+dec_data:
+    lb      t1, 0(t6)
+    add     t1, t1, -1
+    sb      t1, 0(t6)
+    j       cont02
+print_data:
+    li       a7, 64           # SYS_write
+    li       a0, 1
+    move     a1, t6
+    li       a2, 1
+    ecall
+    j        cont02
+read_data:
+    li       a7, 63           # SYS_read
+    li       a0, 0
+    move     a1, t6
+    li       a2, 1
+    ecall
+    # Aqui no hace falta el salto, pero la necesitaremos luego
+    j        cont02          
+cont02:
+    add      t2, t2, 1       # Incrementa contador del programa
+    blt      t2, t3, bucle02 # Mientras no alcancemos el final...
+                             # repetimos
+    
+exit:
+    li       a7, 93          # SYS_exit 
+    li       a0, 0
+    ecall
+
+    .data
+prog:
+    .fill MEM_SIZE
+data:
+    .fill MEM_SIZE
+\end{lstlisting}
+
+\hypertarget{colofuxf3n}{%
+\sectiontext{white}{black}{COLOFÓN}\label{colofuxf3n}}
+
+Ya tenemos casi listo nuestro intérprete, solo nos faltan los bucles,
+que son la parte que tiene algo de complicación y pulirlo un poco. Pero
+eso lo veremos en la siguiente entrega.
+
+\end{multicols}

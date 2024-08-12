@@ -1,0 +1,703 @@
+\hypertarget{ratas:rsa1}{}\label{ratas:rsa}
+\pagestyle{ratas}
+
+\rput(7.9,-0.5){\resizebox{!}{12cm}{{\epsfbox{images/rsa_header.eps}}}}
+
+\psset{fillstyle=solid}
+\psframe[fillcolor=black,opacity=0.7](2,-4.5)(17,0)
+
+
+
+% -------------------------------------------------
+% Cabecera
+\begin{flushright}
+
+
+{\color{introcolor}\mtitle{14cm}{Cifrado Asimétrico con
+OpenSSL}}
+
+\msubtitle{12cm}{Todo lo que siempre quisiste saber sobre RSA}
+
+{\sf\color{white}{ por Don Bit0}}
+
+%{{\psset{linecolor=black,linestyle=dotted}\psline(-12,0)}}
+\end{flushright}
+
+
+\vspace{2mm}
+% -------------------------------------------------
+
+
+%\lstset{language=C,frame=tb,framesep=5pt,basicstyle=\footnotesize}
+\lstset{language=C,frame=tb,framesep=5pt,basicstyle=\scriptsize}
+
+
+
+\intro{introcolor}{E}{n este número nos vamos a adentrar en el fascinante mundo del cifrado
+asimétrico de la mano de OpenSSL. Un viaje alucinante en el que nos
+sumergiremos en la tecnología utilizada para implementar la mayoría de
+sistemas de seguridad actuales\ldots.. Vam'o allá.}
+
+\begin{multicols}{2}
+
+Por si acaso has llegado aquí sin haber leído
+\href{https://ibolcode.net/roor//2024-03-criptografia-para-dummies}{esto}
+o
+\href{https://ibolcode.net/roor//2024-05-criptografia-para-dummies--parte-ii}{esto},
+los sistemas de cifrado asimétrico son aquellos que utilizan un par de
+claves complementarias para cifrar y descifrar mensajes. Si un mensaje
+es cifrado con una de las claves del par, se puede descifrar con la otra
+y viceversa. Esta tecnología es la que permite que accedamos de forma
+segura a nuestro banco o que cierta información se pueda firmar
+digitalmente.
+
+\hypertarget{rsa}{%
+\sectiontext{white}{black}{RSA}\label{rsa}}
+
+Si bien hay distintos algoritmos de cifrado asimétrico, en este artículo
+vamos a utilizar \href{https://es.wikipedia.org/wiki/RSA}{RSA} ya que es
+el más popular y uno de los más utilizados. RSA toma su nombre de los
+apellidos de sus creadores:
+\href{https://es.wikipedia.org/wiki/Ronald_Rives}{Rivest},
+\href{https://es.wikipedia.org/wiki/Adi_Shamir}{Shamir} y
+\href{https://es.wikipedia.org/wiki/Leonard_Adleman}{Adleman}.
+Matemáticamente se basa en generar números muy grandes\ldots{} pero eso
+lo vamos a dejar de lado en este artículo ya que no es algo que no es
+estrictamente necesario para poder utilizar este tipo de algoritmo.
+
+
+El sistema criptográfico RSA utiliza dos claves, como ya os avanzamos,
+que se suelen conocer como clave pública y clave privada, precisamente
+porque una de ellas se espera que la conozca todo el mundo, mientras que
+las otra es fundamental que la mantengamos secreta. Usando estas dos
+claves podemos hacer varias cosas:
+
+\begin{itemize}
+\item
+  Cifrando un mensaje con la clave pública de alguien (esa que conoce
+  todo el mundo), así conseguiremos que sólo la persona con la
+  correspondiente clave privada pueda descifrar el mensaje
+\item
+  Si ciframos un mensaje con nuestra clave privada\ldots{} cualquiera
+  puede descifrarlo (usando nuestra clave pública), pero en este caso,
+  los receptores del mensaje sabrán seguro que el mensaje es nuestro, ya
+  que solo nosotros conocemos nuestra clave privada (esto se usa en los
+  sistemas de firma digital).
+\end{itemize}
+
+Así que como podéis ver, disponer de estas claves es el primer paso que
+necesitamos para poder jugar con este tipo de sistema criptográfico.
+
+\hypertarget{generando-claves-rsa-con-openssl}{%
+\sectiontext{white}{black}{\texorpdfstring{GENERANDO CLAVES RSA CON
+\texttt{openssl}}{Generando claves RSA con openssl}}\label{generando-claves-rsa-con-openssl}}
+
+La forma más sencilla de generar nuestro par de claves es utilizando la
+utilidad de línea de comandos que ofrece OpenSSL y que lleva su mismo
+nombre. En seguida veremos como hacer lo mismo en nuestros propios
+programas, pero saber utilizar la utilidad
+\verb!openssl! nos va a permitir comprobar que
+nuestro código está generando la información correctamente.
+
+\begin{entradilla}
+{\em RSA es uno de los algoritmos de cifrado asimétrico más populares y todavía se utiliza extensivamente en la actualidad.}
+\end{entradilla}
+
+
+Para generar un par de claves RSA podemos utilizar el siguiente comando:
+
+\begin{lstlisting}
+$ openssl genrsa claves.pem 2048
+\end{lstlisting}
+
+Esto va a generar nuestro par de claves en el fichero
+\verb!claves.pem!. En este caso hemos utilizado una
+longitud de clave de 2048 que se considera segura. Si sois unos
+paranoicos podéis aumentar la longitud de clave a 4096.
+
+Este comando va a generar un fichero talque así:
+
+\begin{lstlisting}
+-----BEGIN PRIVATE KEY-----
+MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDVB...
+(.... mogollón de letras raras )
+-----END PRIVATE KEY-----
+\end{lstlisting}
+
+Este formato se conoce como
+\href{https://en.wikipedia.org/wiki/Privacy-Enhanced_Mail}{PEM} que es
+el acrónimo de \emph{Privacy Enhanced Mail}, el cual es el estándar más
+popular para almacenar claves y certificados. Básicamente almacena los
+datos codificados en
+\href{https://en.wikipedia.org/wiki/Base64encoded}{Base64} indicando el
+principio y el fin de los datos con las líneas
+\verb!-----BEGIN! y
+\verb!-----END! seguidas de una etiqueta como por
+ejemplo: \verb!PRIVATE KEY!,
+\verb!CERTIFICATE!,
+\verb!X509 CRL!\ldots{}
+
+Y sí, como su propio nombre indica el formato fue definido inicialmente
+para mejorar la privacidad de los correos electrónicos.
+
+\hypertarget{generando-claves-desde-nuestro-programa}{%
+\sectiontext{white}{black}{GENERANDO CLAVES DESDE NUESTRO PROGRAMA}\label{generando-claves-desde-nuestro-programa}}
+
+En ocasiones nos va a interesar generar claves en nuestros propios
+programas. Hay muchos casos en los que esto es útil, pero a modo de
+ejemplo, esto es algo que hacen los programas ransomware, que generan un
+par de claves aleatorias para cifrar los datos de su víctima. Realmente
+no se cifran con esa clave directamente, pero eso lo veremos un poco más
+adelante. En
+\href{https://ibolcode.net/roor//2024-03-criptografia-para-dummies}{este}
+artículo os contamos como se usan en sistemas de mensajería por ejemplo.
+
+El programa para generar las claves utiliza la familia de funciones
+\verb!EVP! de OpenSSL que ya hemos visto en entregas
+anteriores y que simplifica nuestra vida mogollón:
+
+\begin{lstlisting}[language=C]
+#include <openssl/evp.h>
+#include <openssl/rsa.h>
+#include <openssl/pem.h>
+
+int main () {
+  EVP_PKEY_CTX *ctx;
+  EVP_PKEY     *pkey;
+
+  ctx = EVP_PKEY_CTX_new_id (EVP_PKEY_RSA, NULL);
+  
+  EVP_PKEY_keygen_init (ctx);
+  EVP_PKEY_CTX_set_rsa_keygen_bits (ctx, 2048);
+  EVP_PKEY_keygen (ctx, &pkey);
+  
+  FILE *f = fopen ("mis_claves.pem", "wb");
+  PEM_write_PrivateKey (f, pkey, NULL, NULL, 0,
+                           NULL, NULL);
+  fclose (f);
+\end{lstlisting}
+
+OpenSSL mantienen los pares de claves usados por los algoritmos
+asimétricos en una estructura llamada
+\verb!EVP_PKEY! y nos ofrece varias funciones para
+trabajar con ellas\ldots{} como veremos a continuación.
+
+Como siempre con OpenSSL, lo primero que tenemos que hacer es crear un
+contexto para generar nuestra clave. Luego inicializamos el generador de
+claves, configuramos los valores que queramos (en este caso la longitud
+de la clave RSA) y generamos la clave. Las primeras 4 líneas de código
+generan la clave en memoria.
+
+\begin{entradilla}
+{\em Es muy sencillo crear un par de claves RSA utilizando OpenSSL.}
+\end{entradilla}
+
+
+Finalmente, la almacenamos en un fichero en formato PEM, usando la
+función \verb!PEM_write_PrivateKey!. Esta función
+recibe varios parámetros y enseguida os contamos como usarla. Este es su
+prototipo:
+
+
+\begin{lstlisting}
+int PEM_write_PrivateKey(FILE *fp, EVP_PKEY *x,
+                     const EVP_CIPHER *enc,
+                     unsigned char *kstr, int klen,
+                     pem_password_cb *cb, void *u);
+\end{lstlisting}
+
+
+Los últimos 4 parámetros se utilizan en el caso que queramos proteger la
+clave con una clave :) y se interpretan de la siguiente forma:
+
+\begin{itemize}
+\item
+  Si \verb!kstr! no es \verb!NULL!
+  entonces \verb!klen! caracteres de
+  \verb!kstr! se utilizarán como clave para cifrar el
+  par de claves que hemos generado usando el cifrado
+  \verb!EVP_CIPHER! (por ejemplo AES-256).
+\item
+  Sino, si \verb!cb! no es
+  \verb!NULL! y apunta a una función (un
+  \emph{callback}), se ejecutará esa función, la cual normalmente,
+  preguntará al usuario por una contraseña. En ese caso, el puntero
+  \verb!u! se usa para pasar parámetros adicionales a
+  la función.
+\end{itemize}
+
+El callback \verb!cb! tiene el siguiente prototipo:
+
+\begin{lstlisting}
+int cb(char *buf, int size, int rwflag, void *u);
+\end{lstlisting}
+
+donde: * \verb!buf! es el buffer donde se escribirá
+la contraseña * \verb!size! es el tamnaño máximo del
+buffer * \verb!rwflag! indica si estamos leyendo o
+escribiendo en el fichero * \verb!u! es el mismo
+parámetro que pasamos a \verb!PEM_write_PrivateKey!
+
+En nuestro ejemplo,para mantener el código sencillo, almacenamos
+nuestras claves RSA sin cifrar. Si queréis hacer pruebas con eso, podéis
+generar claves protegidas con contraseña con el siguiente comando:
+
+\begin{lstlisting}
+$ openssl genrsa -aes256 2048
+Enter PEM pass phrase:
+Verifying - Enter PEM pass phrase:
+\end{lstlisting}
+
+Esto genera un fichero PEM, pero con las siguientes cabeceras:
+
+\begin{lstlisting}
+-----BEGIN ENCRYPTED PRIVATE KEY-----
+MIIFLTBXBgkqhkiG9w0BBQ0wSjApBgkqhkiG9w0BBQwwHAQIZxFPDR....
+(... letras raras)
+-----END ENCRYPTED PRIVATE KEY-----
+\end{lstlisting}
+
+Podéis obtener la clave en plano usando
+
+\begin{lstlisting}
+$ openssl rsa -in CLAVE_CIFRADA.pem
+$ openssl rsa -in CLAVE_CIFRADA.pem -passin pass:TU_CLAVE
+\end{lstlisting}
+
+\hypertarget{donde-estuxe1-mi-clave-puxfablica}{%
+\sectiontext{white}{black}{¿DÓNDE ESTÁ MI CLAVE PÚBLICA?}\label{donde-estuxe1-mi-clave-puxfablica}}
+
+Esa es una muy buena pregunta. La verdad es que cuando generamos la
+clave estamos generando el par de claves que necesitamos y en general,
+el fichero PEM que contiene la clave privada también contiene la clave
+publica. Sin embargo, nos interesa almacenar la clave pública de forma
+separada para así, por ejemplo, poder compartirla.
+
+En la línea de comandos lo podemos hacer muy fácilmente usando el
+siguiente comando:
+
+\begin{lstlisting}
+$ openssl rsa -in clave.pem -pubout clave_publica.pem
+\end{lstlisting}
+
+Para hacer que nuestro programa genere también un fichero para nuestra
+clave pública solo tenemos que añadir la siguientes líneas al final:
+
+\begin{lstlisting}[language=C]
+  f = fopen ("example_public.pem", "w");
+  PEM_write_PUBKEY (f, pkey);
+  fclose (f);
+\end{lstlisting}
+
+Ahora que ya sabemos como generar claves\ldots{} veamos como leerlas en
+nuestros programas.
+
+\hypertarget{nuestro-programa-de-ejemplo}{%
+\sectiontext{white}{black}{NUESTRO PROGRAMA DE EJEMPLO}\label{nuestro-programa-de-ejemplo}}
+
+De la misma forma que hicimos con el artículo sobre cifrado simétrico,
+vamos a escribir un sencillo programa de ejemplo que implementa las
+principales funciones que podríamos necesitar en nuestros programas,
+exceptuando la generación de claves que ya hemos discutido. A saber:
+
+\begin{itemize}
+\item
+  Leer claves de fichero almacenados en el disco
+\item
+  Cifrar datos usando la clave pública de un usuario
+\item
+  Descifrar un mensaje utilizando nuestra clave privada.
+\end{itemize}
+
+Así que vamos a ello!
+
+\hypertarget{leer-claves-de-disco}{%
+\sectiontext{white}{black}{LEYENDO CLAVES}\label{leer-claves-de-disco}}
+
+Lo primero que debemos hacer es leer las claves que normalmente estarán
+almacenadas en ficheros en el disco o en memoria. Como para nuestro
+ejemplo tenemos que leer una clave pública y una privada, vamos a
+almacenar la privada en un fichero y la pública como una cadena de
+caracteres en nuestro código para así demostrar como leer datos en ambos
+casos.
+
+La clave pública la podemos almacenar como una cadena de caracteres.
+Algo como esto:
+
+\begin{lstlisting}[language=C]
+const unsigned char *clave_pub_str =
+  "-----BEGIN PUBLIC KEY-----\n"
+  "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AM"
+  "IIBCgKCAQEAu49Qdny7xh2PbeV/oTYr\n"
+  "Q9MmkDfKvf/Fgq7DFfAnYuDiYljM/FNCj"
+  "KRRQLn4YSyINWuXpDAO9AG7jBfVvm2K\n"
+  "5Pchkj0HA/Gau9eSFUSoR0LWCrAlAZw8o"
+  "vq8urQHsFKtd5kkjGsEfnp9zHfvV3NB\n"
+  "gO5WzJhhDTnCza5B7AhVKXjS0YeGzKonG"
+  "hTW6OJTEAnE+oyZp7acdOKy9knXs/Uk\n"
+  "2PfRI+P4i/XR09LbQFb06y66MN+CLkm3T"
+  "VU+Olw6wuSUCj/0rM3CrbWtAbDff9lp\n"
+  "vlnHI+A3kOHydm71L1bLDs6fY8kASbA+1"
+  "OITcmCXPXLLe6omSfRPYkstCU/CoPfb\n"
+  "7QIDAQAB\n"
+  "-----END PUBLIC KEY-----\n";
+\end{lstlisting}
+
+Suponiendo que la clave privada está en un fichero llamado
+\verb!clave.pem!, nuestro código quedaría de la
+siguiente forma:
+
+\begin{lstlisting}[language=C]
+  OSSL_LIB_CTX     *libctx = NULL;
+  OSSL_DECODER_CTX *dctx = NULL;
+  EVP_PKEY_CTX     *pkctx = NULL;
+  EVP_PKEY         *pub_key = NULL;
+  EVP_PKEY         *priv_key = NULL;
+
+  /* Usa el contexto de librería por defecto */
+  libctx = NULL; 
+  /* Configuramos decodificación clave privada */
+  dctx = OSSL_DECODER_CTX_new_for_pkey (&priv_key,
+                    "PEM", NULL, "RSA",
+                    EVP_PKEY_KEYPAIR,libctx, NULL);
+
+  /* Lee clave publica usuario 2*/
+  FILE *f = fopen ("clave.pem", "rb");
+  OSSL_DECODER_from_fp (dctx, f);
+  fclose (f);
+  OSSL_DECODER_CTX_free(dctx);
+  
+  /* Configuramos decodificación de la clave pública*/
+  dctx = OSSL_DECODER_CTX_new_for_pkey (&pub_key,
+                    "PEM", NULL, "RSA",
+                    EVP_PKEY_PUBLIC_KEY,libctx, NULL);
+  const unsigned char *data = clave_pub_str;
+  size_t         data_len = strlen (clave_pub_str);;
+  OSSL_DECODER_from_data (dctx, &data, &data_len);
+  OSSL_DECODER_CTX_free(dctx);
+\end{lstlisting}
+
+Aunque estamos seguros de que sois capaces de entender todo el código
+directamente vamos a explicar un par de cosas que puede que no sean tan
+obvias. La primera es el uso de \verb!OSSL_LIB_CTX!
+este es como el contexto de más alto nivel en el que se define como
+queremos usar OpenSSL. Salvo casos muy especiales será siempre
+\verb!NULL!, lo que significa que usaremos el
+contexto por defecto que nos irá de perlas en la mayoría de los casos.
+
+Como podéis ver la función para crear el contexto del decodificador de
+claves espera como parámetro ese valor. Podríamos haber pasado
+\verb!NULL! directamente, pero de esta forma veis
+como usar este contexto de librería.
+
+\begin{entradilla}
+{\em El objeto \verb!OSSL_DECODER_CTX! nos permite decodificar fácilmente claves en distintos formatos}
+\end{entradilla}
+
+Para leer las claves estamos usando un objeto OpenSSL llamado
+decodificador (\verb!OSSL_DECODER!), esto nos
+permite procesar fácilmente las claves en distintos formatos. Como
+podéis ver, en ambos casos le estamos diciendo que el buffer que
+contiene la clave estará codificado usando formato
+\verb!PEM! y contiene una clave
+\verb!RSA!. Es posible poner todos estos parámetros a
+\verb!NULL! y la librería intentará averiguar los
+valores correctos.
+
+Observad que para la clave privada, le decimos al objeto decodificador
+que esperamos \verb!EVP_PKEY_KEYPAIR! mientras que
+para la clave pública esperamos
+\verb!EVP_PKEY_PUBLIC_KEY!. Lo que esto significa,
+a parte de almacenar en la variable que pasamos como primer parámetro
+una u otra clave, es que el fichero/buffer que pasamos en el primer caso
+tiene que contener una clave privada o de lo contrario se producirá un
+error. En el segundo caso podemos pasar una clave privada o una pública
+y el \verb!OSSL_DECODER! obtendrá el valor correcto.
+
+Recordad que la clave privada es realmente el par de claves y siempre
+podemos deducir la clave publica a partir de la clave privada.
+
+\begin{quote}
+\textbf{NOTA}
+
+{\color{darkgray}{
+Explicado así a lo bestia, el algoritmo genera un número muy grande que
+se puede factorizar como el producto de dos números primos muy grandes:
+\verb!KP = PUB * PRIV!, de forma que si conocemos dos
+de esos valores siempre podemos calcular el otro fácilmente. Al ser
+\verb!PUB! y \verb!PRIV! primos,
+esa es la única factorización posible de \verb!KP!.
+Esto es una simplificación, pero entender como podemos derivar una de
+las claves a partir de la otra.}}
+\end{quote}
+
+Una vez preparados nuestros contexto solo tenemos que utilizar la
+función que nos vaya mejor. En el primer caso usamos
+\verb!OSS_DECODER_from_fp! que nos permite leer
+los datos fácilmente desde un fichero, y en el segundo caso usamos
+\verb!OSS_DECODER_from_data! que nos permite leer
+los datos de memoria.
+
+\hypertarget{notas-sobre-formatos}{%
+\sectiontext{white}{black}{SOBRE FORMATOS DE CLAVES}\label{notas-sobre-formatos}}
+
+Hasta ahora hemos estado usando el formato PEM para todos nuestros
+ejemplo, ya que es el más común, sin embargo, podemos codificar nuestras
+claves usando diferentes formatos y, como habéis visto,
+\verb!OSSL_DECODER! nos va a permitir obtener los
+valores que necesitamos a partir de ellos. Vamos a perder unos minutos
+en entender estos formatos.
+
+El formato PEM ya lo describimos anteriormente. No es más que el valor
+de nuestra clave codificado en \verb!base64! con
+marcas inicial y final.
+
+Existe otro formato bastante popular, utilizado para intercambiar las
+claves, llamado \verb!DER! (\emph{Distinguised
+Encoding Rules} reglas de cifrado distinguidas/diferenciadas). Este
+formato es una versión reducida de \verb!BER!
+(\emph{Basic Encoding rules} reglas de cifrado básico) y existe un
+tercer formato derivado de \verb!BER! llamado
+\verb!CER! (\emph{Canonical Encoding Rules} Reglas de
+cifrado canónico).
+
+\begin{entradilla}
+{\em Las claves se distribuyen utilizando diferentes formatos. PEM, DER y CER son los más comunes}
+\end{entradilla}
+
+
+Todas estas formas de codificación están relacionadas con el nivel de
+presentación del modelo de referencia OSI\ldots{} toma yá. El nivel de
+presentación, o capa 6, es en la que se describe como representar
+información de forma que pueda ser intercambiada por cualquier tipo de
+máquina. Una de las cosas que se utiliza para ello es el lenguaje de
+definición de datos \verb!ASN.1! (\emph{Abstract
+Syntax Notation} o Notación de Sintaxis Abstracta).
+
+\verb!ASN.1! es un lenguaje parecido a Pascal con el
+que definir estructuras de datos y sus instancias asociadas. Junto al
+lenguaje es necesario especificar una forma de convertir datos asociados
+a las estructuras \verb!ASN.1!, en algo que podamos
+intercambiar entre máquinas. Por ejemplo, si nuestra estructura de datos
+define un entero, tenemos que definir cuantos bits va a tener ese entero
+y en que orden se van a enviar, de forma que máquinas con distinta
+\verb!Endianess! u otros tamaños de palabra puedan
+leer el dato que queremos.
+
+En aplicaciones sencillas, acabarás utilizando
+\verb!JSON! o \verb!XML! para este
+propósito, sin embargo gran parte de la infraestructura de seguridad de
+red se definió sobre conceptos OSI y es por ello que la manera
+multiplataforma de intercambiar información es utilizando
+\verb!ASN.1!. Hay que decir, que la representación
+binaria que consigues con ASN.1 es mucho más eficiente que
+\verb!JSON! o \verb!XML! además de
+otra ventajas.
+
+\medskip
+
+\hrule
+\color{darkgray}{\em 
+\verb!JSON! o \verb!XML! son otras
+formas de solucionar el problema de serialización o \emph{marshalling}.
+El problema consiste en tomar una representación en memoria de datos,
+normalmente en formato binario dependiente de la máquina que los
+almacena, y convertirlos en otra representación que otras máquinas
+diferentes puedan interpretar para generar los mismos datos en memoria
+pero usando su representación interna. \verb!JSON! o
+\verb!XML! consiguen esto convirtiendo los datos en
+cadenas de texto. Es una de las formas más portables de hacerlo, pero
+también la más ineficiente. Un valor entero de 32bits requiere 4 bytes
+para poder almacenarlo en forma binaria. Ese valor Como texto
+hexadecimal (\verb!0xffffffff!) requeriría 8 bytes (2
+bytes por dígito hexadecimal), y como una representación decimal podría
+requerir hasta 10 caracteres (máximo valor con signo es 2147483647).
+}
+\color{black}
+\hrule
+\medskip
+
+Volviendo a nuestra cuestión de las claves.
+\verb!DER! es una representación binaria de una
+estructura ASN.1. Esto lo puedes ver con el siguiente comando:
+
+\begin{lstlisting}
+$ openssl asn1parse -in clave.pem
+ 0:d=0  hl=4 l=1215 cons: SEQUENCE
+ 4:d=1  hl=2 l=   1 prim: INTEGER       :00
+ 7:d=1  hl=2 l=  13 cons: SEQUENCE
+ 9:d=2  hl=2 l=   9 prim: OBJECT        :rsaEncryption
+20:d=2  hl=2 l=   0 prim: NULL
+22:d=1  hl=4 l=1193 prim: OCTET STRING  [HEX DUMP]:30...
+\end{lstlisting}
+
+Estos son los campos que contiene nuestra clave. Así que resumiendo:
+
+\begin{itemize}
+\item
+  Un par de claves pública/privada es un conjunto de datos organizados
+  en una estructura ASN.1
+\item
+  Esos datos se pueden codificar en distintas representaciones binarias
+  ASN.1 como DER, BER o CER
+\item
+  Si representamos la clave con DER, la codificamos en base64 y le
+  añadimos una cabecera y un pie \ldots{} tenemos una clave PEM
+\end{itemize}
+
+Y no vamos a hablar de certificados por el momento \ldots{} Ya la hemos
+liado bastante. Aunque esperamos que esté un poco más claro ahora de
+donde vienen todos esos valores.
+
+\begin{quote}
+Podéis probar a decodificar los datos de una clave
+\verb!PEM! con el programa
+\verb!base64! y comparar el resultado con lo que
+obtenéis al convertir la clave usando
+
+{\scriptsize
+\verb!openssl rsa -in clave.pem -outform DER -out clave.der!
+}
+
+
+\end{quote}
+
+
+\hypertarget{cifrando-datos}{%
+\sectiontext{white}{black}{CIFRANDO DATOS}\label{cifrando-datos}}
+
+Como veremos en un segundo, lo más complicado de los sistema asimétricos
+es el manejo de las claves. Lo que sigue os resultará muy familiar y
+sencillo, si bien nos toparemos de frente con algunas de las
+limitaciones de estos sistemas.
+
+Veamos el código para cifrar un mensaje usando RSA. Lo primero que
+haremos será declarar e inicializar nuestro buffer de entrada y de
+salida.
+
+\begin{lstlisting}[language=C]
+  /* Cifrar mensaje para usuario dos. */
+  /*Usamos clave publica usuario 2*/
+  char    in[1024];
+  char    out[1024];
+  size_t  in_len, out_len, len;
+  
+  memset (in,0,1024);
+  strcpy (in, "Hola Occam's Razor. "
+               "Estoy cifrando asimétricamente!\n");
+  in_len = strlen (in);
+  
+  memset (out, 0, 1024);
+  out_len= in_len;
+\end{lstlisting}
+
+Ahora crearemos un contexto \verb!PKEY!
+(\verb!Pair KEY!) que nos permitirá cifrar nuestro
+buffer de entrada. Al crearlo le pasamos la clave que queremos utilizar
+para el cifrado, en este caso la clave pública del usuario para el que
+estamos cifrando el mensaje. Una vez que el contexto está definido solo
+tenemos que llamar a \verb!EVP_PKEY_encrypt_init!
+y \verb!EVP_PKEY_encrypt! para cifrar nuestro
+mensaje. Algo como esto:
+
+\begin{lstlisting}[language=C]
+  pkctx = EVP_PKEY_CTX_new (pub_key, NULL);
+  if ((EVP_PKEY_encrypt_init (pkctx)) <=0) 
+       ERR_print_errors_fp (stderr);
+  // Calcula tamaño necesario para el buffer de salida
+  if (EVP_PKEY_encrypt (pkctx, NULL, &out_len,
+                               in, in_len) <=0) 
+      ERR_print_errors_fp (stderr);
+  
+  printf ("+ Mensaje original: %d bytes. "
+          "Mensaje salida: %d bytes\n",
+          in_len, out_len);
+      
+  // Ahora ciframos de verdad
+  if (EVP_PKEY_encrypt (pkctx, out, &out_len,
+                               in, in_len)<=0) 
+      ERR_print_errors_fp (stderr);
+  BIO_dump_indent_fp (stdout, out, out_len, 2);
+  printf ("\n");
+
+  EVP_PKEY_CTX_free (pkctx);
+\end{lstlisting}
+
+Como podéis ver hacemos dos llamadas a
+\verb!EVP_PKEY_encrypt!. En la primera el buffer de
+salida es \verb!NULL!. En este caso, la función
+almacenará en \verb!out_len! el tamaño de buffer que
+necesitaríamos para almacenar el mensaje cifrado de forma que lo
+podremos reservar dinámicamente si fuera necesario.
+
+Para el caso de RSA con una clave de 2048 bits, el tamaño del mensaje
+cifrado es siempre de 256 bytes (2048 bits / 8 = 256 bytes). A parte de
+eso, y que no es necesario llamar a una función
+\verb!LOQUESEA_final!, el proceso es similar al que
+usamos para cifrar mensajes utilizando un sistema criptográfico
+simétrico.
+
+\hypertarget{descifrado-del-mensaje}{%
+\sectiontext{white}{black}{DESCIFRANDO MENSAJES}\label{descifrado-del-mensaje}}
+
+El descifrado se realiza de la misma forma, pero sustituyendo las
+funciones \verb!EVP_PKEY_encrypt*! por
+\verb!EVP_PKEY_decrypt*!. AL igual que en el
+cifrado, podemos llamar a \verb!EVP_PKEY_decrypt!
+con un buffer de salida \verb!NULL! para dejar que la
+función calcule el tamaño del buffer que necesitamos.
+
+Con todo esto, el código para descifrar un mensaje cifrado con RSA sería
+algo como esto:
+
+\begin{lstlisting}[language=C]
+  // Borra buffer in  
+  memset (in, 0, 1024);
+  in_len = out_len;
+
+  // Ahora usamos la clave privada
+  if (pkctx = EVP_PKEY_CTX_new_from_pkey (libctx,
+                                         priv_key, NULL)) 
+              ERR_print_errors_fp (stderr);
+  if (EVP_PKEY_decrypt_init (pkctx) <= 0) 
+              ERR_print_errors_fp (stderr);
+  
+  // Calcula tamaño necesario para el buffer de salida
+  if ((EVP_PKEY_decrypt (pkctx, NULL, &in_len,
+                                      out, out_len) <= 0)) 
+      ERR_print_errors_fp (stderr);
+  printf ("+ Mensaje original: %d bytes. "
+          "Mensaje salida: %d bytes\n",
+          out_len, in_len);
+
+  // Ahora encripta de verdad
+  if ((EVP_PKEY_decrypt (pkctx, in, &in_len,
+                                out, out_len)) <= 0) {
+    ERR_print_errors_fp (stderr);
+  }
+  printf ("%d bytes out (%d)\n", in_len, out_len);
+  BIO_dump_indent_fp (stdout, in, in_len, 2);
+  printf ("\n");
+
+  EVP_PKEY_CTX_free (pkctx);
+\end{lstlisting}
+
+Sin grandes novedades, el único comentario que podemos hacer es el uso
+de \verb!EVP_PKEY_CTX_new_from_pkey!, la cual
+nos permite pasar un parámetro adicionales con propiedades de consulta.
+Este parámetro nos permite definir con más detalle como queremos que
+funcione, pero por el momento usar esas opciones simplemente va a añadir
+complejidad a la explicación y confundiros aún más de lo que
+probablemente ya estéis. ;)
+
+\hypertarget{conclusiones}{%
+\sectiontext{white}{black}{CONCLUSIONES}\label{conclusiones}}
+
+En este artículo hemos visto como utilizar OpenSSL para trabajar con
+sistemas de cifrado asimétrico y, en el camino, hemos explorado el mundo
+de la generación y los formatos de claves. OpenSSL ofrece interfaces más
+específicos y multitud de opciones para controlar su funcionamiento.
+Ahora que conocemos lo básico estamos listos para que empiece lo bueno!.
+
+\end{multicols}
+\rput(8.5,-5.0){\resizebox{!}{11.5cm}{{\epsfbox{images/promo/promo02.eps}}}}

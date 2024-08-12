@@ -1,0 +1,376 @@
+\hypertarget{fpn:noparam1}{}\label{fpn:noparam}
+\pagestyle{fpn}
+
+\rput(7.9,-0.5){\resizebox{!}{14cm}{{\epsfbox{images/noparam-header.eps}}}}
+
+\psset{fillstyle=solid}
+\psframe[fillcolor=black,opacity=0.7](2,-4.5)(17,0)
+
+
+
+
+
+% -------------------------------------------------
+% Cabecera
+\begin{flushright}
+
+
+{\color{pink}\mtitle{14cm}{Llamando a funciones con parametros sin parámetros}}
+
+\msubtitle{8cm}{Abusando contenidos de la pila}
+
+{\sf\color{white}{ por Carolyn Lightrun}}
+
+%{{\psset{linecolor=black,linestyle=dotted}\psline(-12,0)}}
+\end{flushright}
+
+
+\vspace{2mm}
+% -------------------------------------------------
+\lstset{language=C,frame=tb,framesep=5pt,basicstyle=\scriptsize}
+
+\intro{introcolor}{E}{n esta entrega de \textbf{Fenómenos Extraños} os traemos el extraño
+caso de la función sin parámetros que procesa y recibe
+parámetros\ldots{} Habéis oído alguna vez algo tan misterioso?. Más inquietante no se puede. \bigskip}
+
+\begin{multicols}{2}
+
+Imaginad llamar a un función normal y corriente que acepta varios
+parámetros sin pasarle ningún de ellos directamente pero siendo capaces
+de pasarle los valores que nosotros queramos de forma indirecta. Mola
+no?. Bueno, lo más seguro es que no se haya entendido nada\ldots{} Pero
+que no cunda el pánico, vamos a ver como se arma todo esto paso a paso.
+
+\hypertarget{radiografuxeda-de-una-funciuxf3n-con-paruxe1metros}{%
+\sectiontext{white}{black}{RADIOGRAFÍA DE UINA FUNCIÓN CON PARÁMETROS}\label{radiografuxeda-de-una-funciuxf3n-con-paruxe1metros}}
+
+Lo primero que vamos a hacer es mirar en el interior de una función con
+parámetros\ldots{} Descifraremos su esencia misma\ldots{} Su naturaleza
+última\ldots{} Desnudaremos su alma\ldots. Usea que vamos a ver el
+ensamblador.
+
+Tomemos como ejemplo a \verb!margarita!, una función
+cualquiera que acepta 3 parámetros:
+
+\begin{lstlisting}[language=C]
+#include <stdio.h>
+
+int margarita (int a, int b, int c) {
+  int _a, _b, _c, _d;
+
+  _a = a;
+  _b = b;
+  _c = c;
+  _d = _a + _b + _c;
+
+  return _d;
+}
+
+int main () {
+  int v1 = margarita (10, 20, 30);
+  printf ("%d\n", v1);
+}
+\end{lstlisting}
+
+Si tras compilar este programa, le echamos un ojo a
+\verb!margarita! veremos algo como esto:
+
+\begin{lstlisting}
+$ make gf-final
+$ objdump -d gf-final | grep -A20 "<margarita>:"
+0000000000001139 <margarita>:
+    1139:   55         push   %rbp
+    113a:   48 89 e5   mov    %rsp,%rbp
+    113d:   89 7d ec   mov    %edi,-0x14(%rbp)
+    1140:   89 75 e8   mov    %esi,-0x18(%rbp)
+    1143:   89 55 e4   mov    %edx,-0x1c(%rbp)
+    1146:   8b 45 ec   mov    -0x14(%rbp),%eax
+    1149:   89 45 fc   mov    %eax,-0x4(%rbp)
+    114c:   8b 45 e8   mov    -0x18(%rbp),%eax
+    114f:   89 45 f8   mov    %eax,-0x8(%rbp)
+    1152:   8b 45 e4   mov    -0x1c(%rbp),%eax
+    1155:   89 45 f4   mov    %eax,-0xc(%rbp)
+    1158:   8b 55 fc   mov    -0x4(%rbp),%edx
+    115b:   8b 45 f8   mov    -0x8(%rbp),%eax
+    115e:   01 c2      add    %eax,%edx
+    1160:   8b 45 f4   mov    -0xc(%rbp),%eax
+    1163:   01 d0      add    %edx,%eax
+    1165:   89 45 f0   mov    %eax,-0x10(%rbp)
+    1168:   8b 45 f0   mov    -0x10(%rbp),%eax
+    116b:   5d         pop    %rbp
+    116c:   c3         ret
+\end{lstlisting}
+
+Veamos que hace todo ese código que acabamos de extraer del programa:
+
+\begin{lstlisting}
+push %rbp             # Almacena el Frame Pointer anterior
+mov  %rsp,%rbp        # Nuevo FP apunta al la pila
+mov  %edi,-0x14(%rbp) # Parametro 1 -> RPB - 0x14
+mov  %esi,-0x18(%rbp) # Parametro 2 -> RBP - 0x18
+mov  %edx,-0x1c(%rbp) # Parametro 3 -> RBP - 0x1A
+mov  -0x14(%rbp),%eax # Copia Parametro 1 en EAX
+mov  %eax,-0x4(%rbp)  # Almacena EAX en RBP-0x4
+mov  -0x18(%rbp),%eax # Copia Parametro 2 en EAX
+mov  %eax,-0x8(%rbp)  # Almacena EAX en RBP-0x8
+mov  -0x1c(%rbp),%eax # Copia Parámetro 3 en EAX
+mov  %eax,-0xc(%rbp)  # Almancena EAX en RBP - 0x0c
+mov  -0x4(%rbp),%edx  # Copia Parametro 1 a EDX
+mov  -0x8(%rbp),%eax  # Copia Parametro 2 a EAX
+add  %eax,%edx        # EAX = Parametro1 + Parametro 2
+mov  -0xc(%rbp),%eax  # Copia Parametro 3 a EAX
+add  %edx,%eax        # EAX = EAX + Parametro 3
+mov  %eax,-0x10(%rbp) # Almanacena Par1+Par2+Par3 en RBP -0x10
+mov  -0x10(%rbp),%eax
+pop  %rbp
+ret
+\end{lstlisting}
+
+El código es muy sencillo y reproduce exactamente lo que hemos escrito
+en nuestro programa C\ldots{} Pero lo que nos interesa es la pinta con
+la que se queda la pila
+
+\hypertarget{la-pila-de-una-funciuxf3n-con-paruxe1metros}{%
+\sectiontext{white}{black}{LA PILA DE UNA FUNCIÓN CON PARÁMETROS}\label{la-pila-de-una-funciuxf3n-con-paruxe1metros}}
+
+Según el ensamblador que acabamos de ver, la pila de la función antes de
+retornar tendrá esta pinta:
+
+\begin{lstlisting}
+            | DIRECCIÓN RETORNO | 
+            | BP ANTIGUO
+RSP, RBP -> | 
+RBP-0x04 -> | Variable _a
+RBP-0x08 -> | Variable _b
+RBP-0x0c -> | Variable _c
+RBP-0x10 -> | Variable _d
+RBP-0x14 -> | Copia temporal Parametro 1
+RBP-0x18 -> | Copia Temporal Parametro 2
+RBP-0x1c -> | Copia Temporal Parametro 3
+\end{lstlisting}
+
+Como podéis ver, el compilador genera las variables locales de la
+función en memoria y además copia de forma temporal los valores
+recibidos como parámetros también en la pila.
+
+Cuando la función retorna, lo único que hace es restaurar el valor de BP
+y retornar\ldots. O como se suele decir \emph{``Lo que se escribe en la
+pila se queda en la pila''}.
+
+\hypertarget{conozcamos-a-casper}{%
+\sectiontext{white}{black}{CONOZCAMOS A CASPER}\label{conozcamos-a-casper}}
+
+Es hora de introducir a \verb!casper! que es una
+función muy parecida a \verb!margarita!, pero que
+calcula otra cosa y a la que le vamos a dar un toque fantasmal:
+
+\begin{lstlisting}[language=C]
+int casper (int a, int b, int c) {
+  int _a, _b, _c, _d;
+
+  _d = 2 * _a + 2 * _b + 2 *_c;
+
+  return _d;
+}
+\end{lstlisting}
+
+Si ahora modificamos nuestra función \verb!main! de
+la siguiente forma:
+
+\begin{lstlisting}[language=C]
+int main () {
+  int (*f)() = (int (*)(void))(casper);
+  int v1 = margarita (10, 20, 30);
+  int v2 = f ();
+  int v3 = casper (10, 20, 30);
+  printf ("v1 : %d\n", v1);
+  printf ("v2 : %d\n", v2);
+  printf ("v2 : %d\n", v3);
+}
+\end{lstlisting}
+
+Cual pensáis que es el valor de \verb!v2!? \ldots{}
+Pues sí, el mismo valor que \verb!v3!, es decir,
+hemos ejecutado \verb!casper! sin pasarle parámetros
+pero haciendo que use los valores que nosotros queramos\ldots. Super
+inquietante.
+
+Observad que hemos tenido que usar un \verb!cast! a
+una función sin parámetros para que el compilador no genere un error.
+Esa es la primera línea de la función \verb!main!.
+
+\hypertarget{radiografuxeda-de-casper}{%
+\sectiontext{white}{black}{\texorpdfstring{RADIOGRAFÍA DE \texttt{casper}}{Radiografía de casper}}\label{radiografuxeda-de-casper}}
+
+Vamos a ver que pinta tiene \verb!casper! para
+entender que esta pasando. Aunque imagino que todos vosotros ya lo
+sabréis.
+
+\begin{lstlisting}
+$ objdump -d gf-final | grep -A 16 "<casper>:"
+000000000000116d <casper>:
+    116d:   55        push   %rbp
+    116e:   48 89 e5  mov    %rsp,%rbp
+    1171:   89 7d ec  mov    %edi,-0x14(%rbp)
+    1174:   89 75 e8  mov    %esi,-0x18(%rbp)
+    1177:   89 55 e4  mov    %edx,-0x1c(%rbp)
+    117a:   8b 55 fc  mov    -0x4(%rbp),%edx
+    117d:   8b 45 f8  mov    -0x8(%rbp),%eax
+    1180:   01 c2     add    %eax,%edx
+    1182:   8b 45 f4  mov    -0xc(%rbp),%eax
+    1185:   01 d0     add    %edx,%eax
+    1187:   01 c0     add    %eax,%eax
+    1189:   89 45 f0  mov    %eax,-0x10(%rbp)
+    118c:   8b 45 f0  mov    -0x10(%rbp),%eax
+    118f:   5d        pop    %rbp
+    1190:   c3        ret
+\end{lstlisting}
+
+Y una rápida reconstrucción de la pila para esta función nos dará:
+
+\begin{lstlisting}
+            | DIRECCIÓN RETORNO | 
+            | BP ANTIGUO
+RSP, RBP -> | 
+RBP-0x04 -> | ???
+RBP-0x08 -> | ???
+RBP-0x0c -> | ???
+RBP-0x10 -> | ???
+RBP-0x14 -> | Copia temporal Parametro 1
+RBP-0x18 -> | Copia Temporal Parametro 2
+RBP-0x1c -> | Copia Temporal Parametro 3
+\end{lstlisting}
+
+Y puesto que hemos llamado a las dos funciones de forma consecutiva, el
+contenido de las posiciones con \verb!???! no cambia
+de llamada a llamada, ya que, como indicamos, al terminar las funciones
+no se limpia la pila\ldots{} simplemente se restaura el valor de
+\verb!RSP! y \verb!RBP! de forma
+que se descarte cualquier valor temporal usado durante la función.
+
+So observáis cuidadosamente veréis que el valor de
+\verb!RBP-0x10! se siguie manteniendo, el cual se
+corresponde con la variable local \verb!\_d! de
+\verb!margarita!. Lo que significa que podemos añadir
+más valores que mantener entre llamas a funciones.
+
+\hypertarget{llamadas-muxe1s-sofisticadas}{%
+\sectiontext{white}{black}{LLAMADAS MÁS SOFISTICADAS}\label{llamadas-muxe1s-sofisticadas}}
+
+En nuestro ejemplo anterior hemos usado una única función para pasar los
+parámetros a nuestra función fantasma, pero podemos usar más funciones
+para pasar los valores en distintos pasos y además precalcular valores
+intermedios.. si bien tenemos que tener un poco de cuidado.
+
+Veamos un ejemplo:
+
+\begin{lstlisting}[language=C]
+int margarita (int a, int b, int c) {
+  int _a, _b, _c, _d;
+
+  _a = a;
+  _b = _b;
+  _c = _c;
+  _d = _d + _a;
+
+  return _d;
+}
+
+int azucena (int a, int b, int c) {
+  int _a, _b, _c, _d;
+
+  _a = _a;
+  _b = b;
+  _c = _c;
+  _d = _d + b;
+  return _d;
+}
+
+int hortensia (int a, int b, int c) {
+  int _a, _b, _c, _d;
+
+  _a = _a;
+  _b = _b;
+  _c = c;
+  _d = _d + c;
+  return _d;
+}
+
+int casper (int a, int b, int c) {
+  int _a, _b, _c, _d;
+
+  _d = _d + 2 * (_a +  _b + _c);
+  return _d;
+}
+int main () {
+  int (*f)() = (int (*)())(casper);
+  int v1;
+  v1 = margarita (4, 20, 30); 
+  v1 = azucena   (10, 7, 30);
+  v1 = hortensia (10, 20, 5);
+  int v2 = f ();
+
+  printf ("v2 : %d\n", v2);
+\end{lstlisting}
+
+Como podéis ver en este ejemplo usamos tres funciones para pasar, uno a
+uno los parametros que necesitamos, y además utilizamos cada una de las
+funciones para realizar parte de los cálculos (vamos acumulando valores
+en \verb!\_d!).
+
+\hypertarget{limitaciones}{%
+\sectiontext{white}{black}{LIMITACIONES}\label{limitaciones}}
+
+Si os habéis fijado en el código de la sección anterior ya os habréis
+dado cuenta de algunas limitaciones en la forma de utilizar esto. Vamos
+a explicarlas en detalle.
+
+La primera es que tenemos que reasignar todas las variables locales que
+queramos mantener entre llamadas ya que de lo contrario, el compilador
+pensará que solo necesitamos una variable local, y optimizará el código
+para eso, resultando en las tres funciones escribiendo en el mismo
+offset en la pila. Podéis eliminar las asignaciones y ver el ensamblador
+que obtenemos.
+
+\begin{entradilla}
+{\em La técnica descrita requiere que todas las funciones se declaren de forma que no modifiquen cierta parte de la pila. }
+\end{entradilla}
+
+La segunda limitación y quizás más importante es que no podemos llamar a
+funciones demasiado diferentes entre las llamadas a las funciones que
+almacenan los parámetros y la función final. La razón es que esas
+funciones sobre escribirán la pila y destruirán nuestras variables
+locales. Si por ejemplo, podemos un simple
+\verb!printf! entre una llamada y otra, obtendremos
+un resultado incorrecto.
+
+Podemos usar funciones con distintas signaturas, siempre y cuando se
+preserve la parte inicial de la pila\ldots{} en otras palabras, podemos
+añadir más variables globales si queremos pero no podemos eliminarlas.
+Si vamos a usar 3 parámetros, todas las funciones que llamemos tendrán
+que preservar al menos las 3 primeras variables locales.
+
+Finalmente, a veces el resultado no es el que esperamos. Cuando esto
+sucede suele ser porque el compilador ha optimizado el código de la
+función de tal forma que alguno de los valores se ha reutilizado. Para
+solucionar el problema podéis intentar desactivar las optimizaciones
+para las funciones o modificarlas de forma que el compilador crea que
+necesita esos valores.
+
+\hypertarget{y-todo-esto-paquuxe9}{%
+\sectiontext{white}{black}{Y TODO ESTO PA'QUE?}\label{y-todo-esto-paquuxe9}}
+
+Bueno, el motivo principal de todo esto es para aprender como funcionan
+las llamadas a funciones y la pila. Lo segundo que podemos aprender de
+todo esto es la razón por la que suceden esos bugs en los que el mismo
+código, la primera vez falla, pero la segunda funciona bien (la regla de
+oro es siempre inicializar tus variables). Finalmente, esta parece una
+forma curiosa de ofuscación ya que, a priori, en un análisis estático,
+el código va a parecer incompleto o que realiza unos cálculos diferentes
+a los que realmente está haciendo.
+
+
+\rput(5.0,-12.7){\resizebox{!}{27.3cm}{{\epsfbox{images/promo/promo05.eps}}}}
+\raggedcolumns
+\clearpage
+\end{multicols}

@@ -1,0 +1,561 @@
+\hypertarget{geek:bf03-1}{}\label{geek:bf03}
+\pagestyle{geek}
+
+\rput(7.9,-0.5){\resizebox{!}{14cm}{{\epsfbox{images/bf03-header.eps}}}}
+
+\psset{fillstyle=solid}
+\psframe[fillcolor=black,opacity=0.7](2,-4.5)(17,0)
+
+
+
+
+
+% -------------------------------------------------
+% Cabecera
+\begin{flushright}
+
+
+{\color{pink}\mtitle{14cm}{Intérprete de BraninFuck parte III}}
+
+\msubtitle{8cm}{Implementando los bucles}
+
+{\sf\color{white}{ por Don Bit0}}
+
+%{{\psset{linecolor=black,linestyle=dotted}\psline(-12,0)}}
+\end{flushright}
+
+
+\vspace{2mm}
+% -------------------------------------------------
+\lstset{language=C,frame=tb,framesep=5pt,basicstyle=\scriptsize}
+
+\intro{introcolor}{E}{n esta entrega vamos a extender nuestro intérprete con la capacidad de ejecutar bucles en el lenguaje BrainFuck y así completar la implementación de nuestro intérprete en ensamblador RISC-V.\bigskip}
+
+\begin{multicols}{2}
+
+Comencemos con un breve recordatorio de los comandos
+\verb![! y \verb!]!. El comando
+\verb![! comprueba el valor apuntado por el puntero
+de datos. Si es cero continua la ejecución como si nada, pero en caso de
+ser distinto de cero, deberá saltar al comando
+\verb!]! correspondiente. Si, podemos anidar los
+bucles en \verb!BF!. Veamos un ejemplo
+
+\begin{lstlisting}
+>++[>++[>++++[<<<++++>>>-]<-]<-]<+.
+1   2   3     210    123  2  1  0     Puntero de datos
+\end{lstlisting}
+
+En este ejemplo podemos ver 3 bucles anidados, cada uno utilizando un
+contador en una posición de memoria diferente. El primer contador se
+inicializa a 2, el segundo contador, también a 2 y el tercero a 4. Esto
+significa que el bucle más interno se va a ejecutar 16 veces
+(\verb!2*2*4!). El bucle más interno es:
+
+\begin{lstlisting}
+[<<<++++>>>-]
+\end{lstlisting}
+
+Este pedazo de código mueve el puntero de datos al primer dato en la
+memoria (justo antes del primer contador) e incrementa ese valor en 4.
+Luego vuelve a moverse a la posición con el contador del bucle actual,
+de decrementa y continua.
+
+La memoria irá cambiando de la siguiente forma en cada iteración:
+
+\begin{lstlisting}
+ VAL i  j  k 
+ 0   2  2  4  -> Entrada del bucle interno
+ 4   2  2  3
+ 8   2  2  2
+ ....
+ 16  2  2  0
+ 16  2  1  4 -> Bucle interno de nuevo
+ 20  2  1  3 ...
+ 
+\end{lstlisting}
+
+Así que el programa anterior imprime una \verb!A!.
+Primero genera el número \verb!64! con varios bucles
+y luego le suma \verb!1!. El valor ASCII
+\verb!65! es la letra \verb!A!
+
+Que pasaría con el siguiente programa?
+
+\begin{quote}
+{[}\textgreater++{[}\textgreater++++{[}\textless\textless\textless++++\textgreater\textgreater\textgreater-{]}\textless-{]}\textless-{]}\textless+.
+\end{quote}
+
+En este caso, el contador del bucle externo es
+\verb!0! (no lo hemos modificado) y por lo tanto
+debemos saltar todos los bucles internos hasta el último
+\verb!]! y continuar desde allí. A esto nos referimos
+con el corchete correspondiente.
+
+\hypertarget{como-implementar-los-bucles}{%
+\sectiontext{white}{black}{COMO IMPLEMENTAR LOS BUCLES}\label{como-implementar-los-bucles}}
+
+La implementación de los bucles tiene dos complicaciones. La primera es
+encontrar el corchete correspondiente y la segunda es saber a donde hay
+que retornar cuando el bucle se repite. Bueno, podéis implementar el
+segundo problema buscando el corchete correspondiente hacia atrás, pero
+eso es bastante ineficiente.
+
+\begin{entradilla}
+{\em Los comandos [ y ] nos permiten hacer bucles en el lenguaje BrainFuck.}
+\end{entradilla}
+
+La forma de encontrar el corchete correspondiente que vamos a usar es
+recorrer el programa hacia adelante, sumando uno a una variable auxiliar
+cada vez que se abre un corchete, y restando uno cada vez que se cierra.
+Cuando esa variable valga 0 habremos encontrado el corchete que
+buscamos.
+
+Tomemos nuestro programa de ejemplo. En la figura se muestra los valores
+que toma esta variable auxiliar mientras buscamos el
+\verb!]! correspondiente al primer
+\verb!!
+
+\begin{lstlisting}
+>++[>++[>++++[<<<++++>>>-]<-]<-]<+.
+   1   2     3           2  1  0    Variable auxiliar
+   
+\end{lstlisting}
+
+Para el segundo problema\ldots{} bueno, simplemente usaremos la pila.
+Cada vez que entremos en un bucle almacenaremos en la pila la posición
+de retorno y cada vez que salgamos eliminaremos ese valor de la pila. De
+esta forma nuestros bucles se anidan de forma natural.
+
+Ahora ya podemos escribir el código para los dos comandos que nos
+faltan:¨
+
+\hypertarget{implementando}{%
+\sectiontext{white}{black}{\texorpdfstring{IMPLEMENTANDO \texttt{{[}}}{Implementando {[}}}\label{implementando}}
+
+Continuando con la última versión de nuestro programa del artículo
+anterior, vamos a incluir los nuevos comandos primero. Simplemente
+añadimos dos comparaciones en nuestro bucle principal.
+
+\begin{lstlisting}
+   (...)
+    li  t5, '['
+    beq t4, t5, bucle_ini
+    li  t5, ']'
+    beq t4, t5, bucle_fin
+    (...)
+\end{lstlisting}
+
+Vamos con \verb!bucle-ini!. Esta rutina va a ser un
+poco más larga, así que la vamos a ver por cachos. La primera parte es
+la inicialización.
+
+\begin{lstlisting}
+while_start:
+    # ALmacenamos el contador de programa en la pila
+    sd   t2, 0(sp)
+    # Actualizamos el puntero de pila. 
+    add  sp, sp, -8    
+    # Estos dos comandos son un POP t2
+    
+    # Comprobamos valor en memoria de datos
+    lb   t4, 0(t6)
+    # Si no es cero.. continuamos ejecución normal
+    bnez t4, cont02    
+    # Si data es cero... Salta al final del bucle
+    # a1 es nuestro contador de corchetes. Ya tenemos uno
+    li   a1, 1         
+\end{lstlisting}
+
+Lo primero que hacemos es almacenar el valor actual del contador de
+programa en la pila de forma que podamos recuperarlo fácilmente cuando
+haya que ejecutar una nueva iteración del bucle. En este caso utilizamos
+el comando \verb!sd! que hace lo mismo que
+\verb!sb! pero con una palabra doble (\emph{Double
+Word}) por eso la \verb!d! final. Una vez almacenado
+el valor tenemos que actualizar el puntero de pila
+\verb!sp!. Esta es la forma de hacer un
+\verb!pop! en la pila de un RISC-V.
+
+\begin{entradilla}
+{\em Utilizaremos la pila para almacenar el puntero de retorno de cada bucle.}
+\end{entradilla}
+
+A continuación comprobamos el valor al que apunta el puntero de datos.
+Si el valor no es cero, simplemente continuamos ejecutando. Es decir, si
+el valor no es cero, es que estamos en un bucle y debemos iterar una vez
+más. De lo contrario debemos saltarnos toda el cuerpo del bucle y
+continuar la ejecución en la posición del \verb!]!
+correspondiente.
+
+Para ello, recorreremos el programa como os contamos, sumando uno por
+cada \verb![! y restando uno por cada
+\verb!]!. Debemos empezar con un valor
+\verb!1! ya que hemos encontrado el primer corchete.
+El código que hace esto lo podéis ver a continuación.
+
+\begin{lstlisting}
+bucle03:        
+    add  t2, t2, 1   # Pasamos a instrucción siguiente
+    lb   t4, 0(t2)   # Leemos instruccion actual 
+    li   t5, '['     # Si es un corchete incrementamos
+    beq  t4,t5, incrementa
+    li   t5, ']'
+    beq  t4, t5, decrementa
+    j    cont03
+incrementa:
+    add  a1, a1, 1
+    j    cont03
+decrementa:
+    add  a1, a1, -1
+cont03:
+    bnez a1, bucle03  # Si a1 != 0 Seguimos buscando
+    j    cont02       # SIno continuamos
+\end{lstlisting}
+
+Como podéis ver, el programa hace exactamente lo que dijimos que haría.
+Observad como en la etiqueta \verb!decrementa!
+simplemente dejamos que la ejecución continúe, no es necesario incluir
+un salto como en \verb!incrementa!.
+
+\hypertarget{implementando-1}{%
+\sectiontext{white}{black}{\texorpdfstring{IMPLEMENTANDO \texttt{{]}}}{Implementando {]}}}\label{implementando-1}}
+
+El final del bucle es más sencillo, gracias al uso de la pila que hemos
+preparado astutamente cuando encontramos el \verb![!.
+
+\begin{lstlisting}
+bucle_fin:
+    lb   t4, 0(t6)
+    
+    # Si data es cero.. terminamos el bucle
+    beq  t4, zero, cont04
+    # Sino restaura el último contador de programa
+    ld   t2, 8(sp)         
+    j cont02               # y continua normalmente
+cont04:
+    # Al terminar el bucle limpiamos la pila
+    add  sp, sp, +8        
+    j    cont02
+\end{lstlisting}
+
+El código es una vez más muy fácil de leer. Lo primero que hacemos es
+comprobar el valor al que apunta el puntero de datos (nuestro contador
+de bucle). Si el valor es cero, hemos terminado nuestro bucle, así que
+lo único que tenemos que hacer es limpiar la pila
+(\verb!cont04!). En caso de que estuviéramos
+ejecutando código dentro de otro bucle,todo quedaría listo continuar la
+ejecución del bucle externo.
+
+Veamos esto en nuestro programa de ejemplo.
+
+\begin{lstlisting}
+0123456789ABCD
+>++[>++[>++++[<<<++++>>>-]<-]<-]<+.    PILA
+   ^   ^     ^
+   |   |     +-----------  0xD (retorno bucle más interno)
+   |   +-----------------  0X5 (retorno bucle intermedio)
+   +---------------------  0x3 (retorno bucle externo)
+   
+\end{lstlisting}
+
+Cuando terminamos el bucle interno, eliminaremos de la pila el valor
+\verb!0xD! de tal forma que, al encontrar el
+siguiente \verb!]! en caso de que tengamos que
+continuar el bucle intermedio, sabremos perfectamente a que dirección
+saltar. Observa que cada vez que se repite el bucle intermedio se
+ejecuta un nuevo bucle interno y el valor \verb!0xD!
+volverá a aparecer.
+
+Si el valor al que apunta el puntero de datos fuera distinto de
+\verb!0!, simplemente restauramos el contador del
+programa con el último valor de la pila. Sin embargo, observa que no
+eliminamos el valor de la pila, de forma que todo sigue listo para
+continuar el bucle.
+
+Y con esto nuestro intérprete de \verb!BF! estaría
+completo. Pero antes de mostraros el código completo
+
+\hypertarget{uxfaltimos-detalles}{%
+\sectiontext{white}{black}{ÚLTIMOS DETALLES}\label{uxfaltimos-detalles}}
+
+El último detalle que os queremos comentar tiene que ver con el formato
+del binario que producimos.
+
+En nuestros ejemplos, hemos estado utilizando el segmento
+\verb!.data! para declarar nuestro buffers de datos.
+Eso es correcto, sin embargo tiene la consecuencia de que todo lo que
+pongamos ahí va a acabar en el ejecutable. Así, si ponemos 4K de memoria
+para almacenar nuestro programa y nuestros datos, el binario resultante
+va a tener como mínimo 4Kb, aún cuando nuestro código es solo unos pocos
+bytes.
+
+Para un buffer de 2Kb; 1 Kb para el programa y 1 Kb para datos. El
+programa resultante tiene un tamaño de:
+
+\begin{lstlisting}
+$ ls -l bf-riscv
+-rwxr-xr-x 1 occam occam 4296 Mar 28 09:55 bf-riscv
+\end{lstlisting}
+
+\end{multicols}
+
+Pero si miramos a los \emph{Program Headers}:
+
+\begin{lstlisting}
+$ riscv64-linux-gnu-readelf -l bf-riscv
+
+Elf file type is EXEC (Executable file)
+Entry point 0x100e8
+There are 3 program headers, starting at offset 64
+
+Program Headers:
+  Type           Offset             VirtAddr           PhysAddr
+                 FileSiz            MemSiz              Flags  Align
+  RISCV_ATTRIBUT 0x0000000000000a48 0x0000000000000000 0x0000000000000000
+                 0x0000000000000037 0x0000000000000000  R      0x1
+  LOAD           0x0000000000000000 0x0000000000010000 0x0000000000010000
+                 0x0000000000000248 0x0000000000000248  R E    0x1000
+  LOAD           0x0000000000000248 0x0000000000011248 0x0000000000011248
+                 0x0000000000000800 0x0000000000000800  RW     0x1000
+                 
+\end{lstlisting}
+
+{\scriptsize{\em Al utilizar \verb!.data! para los 2Kb de memoria del intérprete, esos datos de almacenan en el fichero en el segmento de datos (último en la lista).}}
+
+\begin{multicols}{2}
+
+Vemos que nuestro código ocupa 248 bytes, pero nuestra sección de datos
+2048 (0x800).
+
+Lo que podemos hacer para reducir el tamaño de nuestro ejecutable es
+poner nuestros buffers en la sección \verb!.bss!.
+Esta sección se utiliza para almacenar datos no inicializados, si bien,
+en los sistemas modernos, a la hora de comenzar la ejecución de nuestro
+programa, la sección se inicializará con ceros. La idea es que si
+necesitamos datos que tenga ciertos valores al comenzar el programa los
+pongamos en \verb!.data!, pero sino los dejamos
+\verb!.bss! y el sistema reservará la memoria al
+cargar el programa y la inicializará con ceros.
+
+\begin{entradilla}
+{\em La sección \verb!.bss! nos permite reservar memoria sin ocupar espacio en el fichero binario, aunque no podremos inicializarla.}
+\end{entradilla}
+
+
+Cambiemos \verb!.data! a
+\verb!.bss! en nuestro programa:
+
+\end{multicols}
+
+
+\begin{lstlisting}
+$ ls -l bf-riscv-bss
+-rwxr-xr-x 1 edma edma 2240 Mar 28 10:04 bf-riscv-bss
+$ riscv64-linux-gnu-readelf -l bf-riscv-bss
+
+Elf file type is EXEC (Executable file)
+Entry point 0x100e8
+There are 3 program headers, starting at offset 64
+
+Program Headers:
+  Type           Offset             VirtAddr           PhysAddr
+                 FileSiz            MemSiz              Flags  Align
+  RISCV_ATTRIBUT 0x0000000000000248 0x0000000000000000 0x0000000000000000
+                 0x0000000000000037 0x0000000000000000  R      0x1
+  LOAD           0x0000000000000000 0x0000000000010000 0x0000000000010000
+                 0x0000000000000248 0x0000000000000248  R E    0x1000
+  LOAD           0x0000000000000248 0x0000000000011248 0x0000000000011248
+                 0x0000000000000000 0x0000000000000800  RW     0x1000
+                 
+\end{lstlisting}
+
+{\scriptsize{\em Al utilizar \verb!.bss! para los 2Kb de memoria del intérprete, el tamaño en disco del segmento de datos es 0, mientras que en memoria es de 0x800.}}
+
+
+\begin{multicols}{2}
+
+Como podéis ver, el tamaño es ahora prácticamente la mitad. Si os fijáis
+en la salida de \verb!readlef! veréis que el tamaño
+de la zona de datos de memoria sigue siendo 2048, el tamaño en el
+fichero es ahora 0.
+
+\begin{entradilla}
+{\em Nuestro intérprete de BrainFuck para RISC-V a terminado ocupando algo menos que 1Kbyte}
+\end{entradilla}
+
+Si pasamos nuestros programas por la utilidad
+\verb!strip! podremos eliminar alguna información no
+necesaria para ejecutar nuestros programas y hacerlos más pequeños:
+
+\begin{lstlisting}
+$ riscv64-linux-gnu-strip bf-riscv
+$ riscv64-linux-gnu-strip bf-riscv-bss
+$ ls -l bf-riscv*
+-rwxr-xr-x 1 edma edma 1000 Mar 28 10:06 bf-riscv-bss
+-rwxr-xr-x 1 edma edma 3048 Mar 28 10:06 bf-riscv
+\end{lstlisting}
+
+Ahora nuestro versión usando \verb!.bss! ocupa menos
+de 1 Kb, mientras que la otra tiene que mantener los 2Kb de ceros que
+hemos puesto en la sección data.
+
+Tradicionalmente `.bss` es una sección para reservar memoria no inicializada, sin embargo, en los sistemas modernos, esta sección se inicializa con el valor 0 por defecto. 
+
+
+\hypertarget{el-cuxf3digo-final}{%
+\sectiontext{white}{black}{EL CÓDIGO FINAL}\label{el-cuxf3digo-final}}
+
+Como prometimos, aquí tenéis la versión final del programa con todo lo
+que hemos desarrollado en esta mini sería.
+
+\begin{lstlisting}
+    .text
+    .global _start
+    .equ MEM_SIZE, 2048
+_start:
+    # Lee datos desde entrada standard
+    la   a1, mem
+    move t1, zero
+    li   t2, 0x20
+bucle01:    
+    li   a7, 63
+    li   a0, 0
+    li   a2, 1
+    ecall
+    # Si <=0 (EOF) terminamos bucle
+    blez a0, cont01
+    
+    lb  t0, 0(a1)
+    ble t0,t2, bucle01  # Elimina espacios
+    
+    add t1, t1, 1
+    add a1, a1, 1
+    j   bucle01
+cont01:
+    la  t2, mem     # Contador de programa
+                    # (2K inferiores código)
+    li  t4, MEM_SIZE / 2
+    add t6, t2, t4  # Puntero de datos
+                    # (2K superiores datos)
+    # addi solo suma numeros de 12 bits con signo.
+    # Valor maximo 2047
+    add t3, t2, t1  # Apunta al final del programa
+    
+bucle02: # Main Loop    
+    lb  t4, 0(t2)
+    li  t5, '<'
+    beq t4, t5, inc_data_ptr
+    li  t5, '>'
+    beq t4, t5, dec_data_ptr
+    li  t5, '+'
+    beq t4, t5, inc_data
+    li  t5, '-'
+    beq t4, t5, dec_data
+    li  t5, '.'
+    beq t4, t5, print_data
+    li  t5, ','
+    beq t4, t5, read_data
+    li  t5, '['
+    beq t4, t5, while_start
+    li  t5, ']'
+    beq t4, t5, while_end
+    # Simplemente ignora cualquier otro caracter
+    j cont02
+    
+while_start:
+    sd   t2, 0(sp)    # Push contador de programa
+    add  sp, sp, -8 
+    
+    lb   t4, 0(t6)    
+    bnez t4, cont02   # Si data no es cero.. continua,
+    # Si data es cero... Salta al final del bucle
+    li   a1, 1        # En a1 contamos corchetes.
+                      # Empezamos con 1
+bucle03:        
+    add  t2, t2, 1    # Nos saltamos el corchete actual
+    lb   t4, 0(t2)    # Leemos instruccion actual
+    # Si encontramos [ Sumamos 1 a a1.
+    # Si encontramos ] restamos 1
+    # Cuando a1 valga cero habremos encontrado el
+    # corchete correcto
+    li   t5, '['     
+    beq  t4, t5, incrementa
+    li   t5, ']'
+    beq  t4, t5, decrementa
+    j    bucle03
+incrementa:
+    add a1, a1, 1  # Cuando sumamos nunca nos dará cero
+    j   bucle03
+decrementa:
+    add  a1, a1, -1
+    bnez a1, bucle03 
+    j    cont02
+
+while_end:
+    lb   t4, 0(t6)
+    beq  t4, zero, cont04  # Si data es cero.. continua,
+    ld   t2, 8(sp)         # Sino, salta al principio
+    j    cont02
+cont04:
+    add  sp, sp, +8        # Hemos terrminado el bucle.
+                           # Eliminamos de la pila
+    j    cont02
+    
+inc_data_ptr:
+    add  t6, t6, 1
+    j    cont02
+dec_data_ptr:
+    add  t6, t6, -1
+    j    cont02
+inc_data:
+    lb   t1, 0(t6)
+    add  t1, t1, 1
+    sb   t1, 0(t6)
+    j    cont02
+dec_data:
+    lb   t1, 0(t6)
+    add  t1, t1, -1
+    sb   t1, 0(t6)
+    j    cont02
+print_data:
+    li   a7, 64
+    li   a0, 1
+    move a1, t6
+    li   a2, 1
+    ecall
+    j cont02
+read_data:
+    li   a7, 63
+    li   a0, 0
+    move a1, t6
+    li   a2, 1
+    ecall                # Fallback en cont02
+cont02:
+    add  t2, t2, 1       # Incrementa contador del programa
+    blt  t2, t3, bucle02 # Mientras no alcancemos el final
+                         # repetimos
+exit:
+    li   a7, 93             # Exit  
+    li   a0, 0
+    ecall
+    
+    .bss
+mem:    .space MEM_SIZE
+\end{lstlisting}
+
+\hypertarget{conclusiuxf3n}{%
+\sectiontext{white}{black}{CONCLUSIÓN}\label{conclusiuxf3n}}
+
+En esta pequeña serie hemos aprendido a programar en
+\verb!BF! y en ensamblador para la plataforma RISC-V
+de una sola tacada. También hemos visto como construir programas de
+forma iterativa, como configurar un entorno para compilarlos y
+ejecutarlos y algunos detalles como se asigna memoria a ejecutables. Y
+os preguntaréis por que hemos hecho esto?\ldots{} La respuesta que todo
+buen geek daría es: \textbf{Porque podiamos}.
+
+%\raggedcolumns
+%\clearpage
+\end{multicols}
+\clearpage

@@ -1,0 +1,139 @@
+\rput(2.5,-1.5){\resizebox{!}{4.5cm}{{\epsfbox{images/general/trucos1.eps}}}}
+\hypertarget{trucos1}{}\label{trucos}
+
+\pagestyle{trucos}
+
+
+% -------------------------------------------------
+% Cabecera
+\begin{flushright}
+
+
+{\color{introcolor}\mtitle{8cm}{Con un par... de líneas}}
+
+\msubtitle{5cm}{Los Mejores Trucos}
+
+{\sf por Tamariz el de la Perdiz}
+
+{\psset{linecolor=black,linestyle=dotted}\psline(-12,0)}
+\end{flushright}
+
+\vspace{2mm}
+% -------------------------------------------------
+
+\begin{multicols}{2}
+
+\lstset{language=C,frame=tb,framesep=5pt,basicstyle=\scriptsize}
+
+
+\hypertarget{mostrar-el-progreso-de-dd}{%
+\sectiontext{white}{black}{\texorpdfstring{MOSTRAR EL PROGRESO DE
+\texttt{dd}}{Mostrar el progreso de dd}}\label{mostrar-el-progreso-de-dd}}
+
+La aplicación \texttt{dd} nos permite copiar ficheros a bajo nivel, lo
+que incluye volcar discos duros enteros en un fichero. En este caso, el
+proceso puede durar bastante tiempo y por defecto, \texttt{dd} no
+muestra nada en pantalla. Podemos obtener información sobre enviando la
+señal \texttt{SIGUSR1} a \texttt{dd} con un comando como:
+
+\begin{verbatim}
+$ killall -USR1 dd
+\end{verbatim}
+
+El terminal ejecutando \texttt{dd} mostrará algo como esto:
+
+\begin{verbatim}
+$ dd if=/dev/zero bs=1 count=5M of=aa
+841252+0 records in
+841252+0 records out
+841252 bytes (841 kB, 822 KiB) copied, \
+1.31938 s, 638 kB/s
+\end{verbatim}
+
+Si queremos monitorizar periódicamente el estado de \texttt{dd} podemos
+enviar la señal cada cierto tiempoi (10 segundos en el ejemplo de
+abajo):
+
+\begin{verbatim}
+$ watch -n10 killall -USR1 dd
+\end{verbatim}
+
+\hypertarget{mostrar-el-progreso-de-dd-de-forma-interactiva}{%
+\sectiontext{white}{black}{\texorpdfstring{MOSTRAR EL PROGRESO DE \texttt{dd} DE FORMA INTERACTIVA}{Mostrar el progreso de dd de forma interactiva}}\label{mostrar-el-progreso-de-dd-de-forma-interactiva}}
+
+Si somos más de barras de progreso, podemos utilizar la utilidad
+\texttt{pv} que es capaz de conectar la salida estándar de un programa
+con la entrada estándar de otro, contando los datos que se transfieren y
+mostrando una barra de progreso.
+
+El siguiente comando comprime y almacena en un fichero la primera
+partición de la tarjeta SD de un SBC:
+
+\begin{verbatim}
+$ dd if=/dev/mmcblk0 | pv -s 4G -peta | \
+gzip -1 > /media/sda1/sd_backup.img.gz
+\end{verbatim}
+
+Como podéis ver, es necesario pasar el tamaño máximo de los datos a
+transferir de forma que pueda calcular el porcentaje de los datos
+transferidos. En el caso de una tarjeta SD probablemente lo sepamos. En
+otros casos deberemos calcularlo.
+
+\hypertarget{descargar-puxe1ginas-web-desde-bash}{%
+\sectiontext{white}{black}{DESCARGAR PÁGINAS WEB DESDE BASH}\label{descargar-puxe1ginas-web-desde-bash}}
+
+Bash ofrece ciertas capacidades de red que nos permite enviar o recibir
+datos usando TCP/IP desde nuestros scripts. Estas funciones son
+raramente usadas, pero en ocasiones nos pueden resultar útil\ldots{} por
+ejemplo, si en un apuro resulta que no tenemos ni \texttt{wget}, ni
+\texttt{curl}, ni \texttt{lynx},\ldots. Una forma de descargar una
+página web o cualquier fichero usando HTTP sería:
+
+\begin{verbatim}
+$ exec 3<>/dev/tcp/HOST/PUERTO
+$ echo -e "GET /index.html" >&3
+$ cat <&3
+\end{verbatim}
+
+La primera línea crea un descriptor de ficheros asociado a una conexión
+TCP al host y puerto indicado. Una vez creado podemos leer y escribir de
+ese descriptor. La segunda línea realiza una petición \texttt{GET} del
+fichero \texttt{index.html} y la última línea lee el resultado del
+servidor. Podemos usar esto con cualquier servicio TCP que se pueda
+ejecutar de forma interactiva.
+
+\hypertarget{usos-avanzados-de-scp}{%
+\sectiontext{white}{black}{\texorpdfstring{USOS AVANZADOS DE \texttt{scp}}{Usos avanzados de scp}}\label{usos-avanzados-de-scp}}
+
+La utilidad \texttt{scp} usa la infraestructura ofrecida por
+\texttt{ssh} para copiar ficheros entre máquinas de forma seguro y
+versátil. Estas son algunas cosas que podemos hacer con \texttt{scp}:
+
+\begin{verbatim}
+$ scp -l 400 origen destino
+\end{verbatim}
+
+Este comando limitará el ancho de banda usado a 400 kps o si lo preferís
+50KB/s
+
+\begin{verbatim}
+$ scp -3 origen destino
+\end{verbatim}
+
+Este comando copiará los datos desde la máquina de origen a la máquina
+destino usando la máquina actual como punto intermedio. De esta forma es
+posible copiar ficheros entre dos máquinas que no se pueden comunicar
+entre si, utilizando una tercera máquina que puede conectarse con las
+dos. En este modo es recomendable configurar el acceso a las máquinas
+sin contraseña o de lo contrarío la situación puede ser un poco confusa.
+
+\begin{verbatim}
+$ scp -R origen destino
+\end{verbatim}
+
+Este comando es similar al anterior, pero en este caso estaremos
+conectándonos a origen usando \texttt{ssh} y ejecutando \texttt{scp}
+desde allí. Este modo requiere que \texttt{origen} pueda autenticarse en
+el host \texttt{destino} sin utilizar contraseña.
+
+\end{multicols}
